@@ -1,6 +1,9 @@
 name: MBA Scraper
 
 on:
+  push:
+    branches:
+      - master
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
