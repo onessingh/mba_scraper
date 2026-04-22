@@ -1,6 +1,9 @@
 name: Reset & Fresh Sync 🔄
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
