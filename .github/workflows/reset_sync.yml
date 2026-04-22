@@ -1,0 +1,107 @@
+name: Reset & Fresh Sync 🔄
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      SCRAPER_KEY: ${{ secrets.SCRAPER_KEY }}
+      SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+      SCRAPER_ANT_KEY: ${{ secrets.SCRAPER_ANT_KEY }}
+      WEBSCRAPING_AI_KEY: ${{ secrets.WEBSCRAPING_AI_KEY }}
+      CF_WORKER_URL: ${{ secrets.CF_WORKER_URL }}
+      SOL_COOKIES: ${{ secrets.SOL_COOKIES }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip --quiet
+          pip install --quiet \
+            playwright playwright-stealth requests \
+            python-dateutil beautifulsoup4 python-dotenv \
+            curl_cffi "httpx[http2]" cloudscraper || true
+          playwright install chromium --with-deps
+
+      - name: Find scraper directory
+        id: find_dir
+        run: |
+          if [ -f scraper.py ]; then
+            echo "dir=." >> $GITHUB_OUTPUT
+          elif [ -f mba_scraper/scraper.py ]; then
+            echo "dir=mba_scraper" >> $GITHUB_OUTPUT
+          else
+            echo "[ERROR]: scraper.py not found!"
+            ls -la
+            exit 1
+          fi
+          echo "[RESET]: scraper found at $(cat $GITHUB_OUTPUT | grep dir | cut -d= -f2)/"
+
+      - name: Delete all backend data
+        run: |
+          cd ${{ steps.find_dir.outputs.dir }}
+          python3 - <<'EOF'
+          import os, time, sys
+          try:
+              from notifier import Notifier
+          except ImportError:
+              print("notifier.py not found"); sys.exit(1)
+
+          BACKEND_URL = os.environ.get("BACKEND_URL", "")
+          SCRAPER_KEY = os.environ.get("SCRAPER_KEY", "")
+
+          if not BACKEND_URL or not SCRAPER_KEY:
+              print("[ERROR]: BACKEND_URL ya SCRAPER_KEY set nahi hai")
+              sys.exit(1)
+
+          notifier = Notifier(api_url=BACKEND_URL, scraper_key=SCRAPER_KEY)
+          total = 0
+
+          for sem in ["0", "1", "2", "3", "4"]:
+              items = notifier.get_from_website(sem)
+              print(f"[Sem {sem}]: {len(items)} items found")
+              for item in items:
+                  item_id = item.get("_id") or item.get("id")
+                  if not item_id:
+                      continue
+                  if notifier.delete_from_website(sem, item_id):
+                      print(f"  Deleted: {item.get('title','')[:60]}")
+                      total += 1
+                  else:
+                      print(f"  Failed:  {item.get('title','')[:60]}")
+                  time.sleep(0.3)
+
+          print(f"\n[RESET]: {total} items deleted from backend.")
+          EOF
+
+      - name: Clear synced_ids memory
+        run: |
+          SCRAPER_DIR=${{ steps.find_dir.outputs.dir }}
+          echo "[]" > $SCRAPER_DIR/synced_ids.json
+          echo "[RESET]: synced_ids.json cleared."
+
+      - name: Fresh scrape + force sync
+        run: |
+          cd ${{ steps.find_dir.outputs.dir }}
+          python scraper.py --mode all --force
+
+      - name: Commit cleared synced_ids
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          SCRAPER_DIR=${{ steps.find_dir.outputs.dir }}
+          git add $SCRAPER_DIR/synced_ids.json || true
+          git commit -m "reset: fresh sync complete [skip ci]" || true
+          git push || true

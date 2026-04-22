@@ -1,0 +1,167 @@
+name: MBA Scraper
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Scraper mode'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - classes
+          - website
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      BACKEND_URL: ${{ secrets.BACKEND_URL }}
+      SCRAPER_KEY: ${{ secrets.SCRAPER_KEY }}
+      SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+      SCRAPER_ANT_KEY: ${{ secrets.SCRAPER_ANT_KEY }}
+      WEBSCRAPING_AI_KEY: ${{ secrets.WEBSCRAPING_AI_KEY }}
+      CF_WORKER_URL: ${{ secrets.CF_WORKER_URL }}
+      VERCEL_PROXY_URL: ${{ secrets.VERCEL_PROXY_URL }}
+      NETLIFY_PROXY_URL: ${{ secrets.NETLIFY_PROXY_URL }}
+      TOR_PROXY: ${{ secrets.TOR_PROXY }}
+      SOL_COOKIES: ${{ secrets.SOL_COOKIES }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install system dependencies (Ubuntu 24.04 compatible)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb \
+            x11-utils \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libnspr4 \
+            libnss3 \
+            curl \
+            wget \
+            unzip \
+            nodejs \
+            npm
+          sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2 || true
+          sudo apt-get install -y libgconf-2-4 || true
+
+      - name: Install Node.js tools
+        run: |
+          npm install -g puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth 2>/dev/null || true
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip --quiet
+          pip install --quiet \
+            playwright \
+            playwright-stealth \
+            requests \
+            python-dateutil \
+            beautifulsoup4 \
+            python-dotenv \
+            curl_cffi \
+            "httpx[http2]" \
+            cloudscraper \
+            tls-client \
+            seleniumbase \
+            undetected-chromedriver \
+            selenium-wire \
+            scrapling \
+            fp-proxy \
+            || true
+          pip install --quiet patchright || true
+          pip install --quiet nodriver || true
+          pip install --quiet "camoufox[geoip]" || true
+          pip install --quiet DrissionPage || true
+          pip install --quiet pydoll-python || true
+          pip install --quiet botasaurus || true
+          pip install --quiet proxybroker2 || true
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium --with-deps
+          playwright install firefox --with-deps || true
+
+      - name: Install Patchright browser
+        run: |
+          patchright install chromium --with-deps || true
+
+      - name: Install SeleniumBase Chrome
+        run: |
+          seleniumbase install chromedriver || true
+
+      - name: Install Camoufox browser
+        run: |
+          python -m camoufox fetch || true
+
+      - name: Restore synced IDs cache
+        uses: actions/cache@v4
+        with:
+          path: synced_ids.json
+          key: synced-ids-${{ github.run_id }}
+          restore-keys: |
+            synced-ids-
+
+      - name: Determine scraper mode
+        id: mode
+        run: |
+          INPUT_MODE="${{ github.event.inputs.mode }}"
+          MINUTE=$(date +%-M)
+          if [ -n "$INPUT_MODE" ]; then
+            MODE="$INPUT_MODE"
+          elif [ "$MINUTE" -eq "0" ]; then
+            MODE="all"
+          else
+            MODE="website"
+          fi
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+          echo "[WORKFLOW]: Running in mode: $MODE"
+
+      - name: Find and run scraper
+        run: |
+          # Auto-detect scraper location (root or mba_scraper subfolder)
+          if [ -f scraper.py ]; then
+            SCRAPER_DIR="."
+          elif [ -f mba_scraper/scraper.py ]; then
+            SCRAPER_DIR="mba_scraper"
+          else
+            echo "[ERROR]: scraper.py not found in root or mba_scraper/!"
+            echo "Files in root: $(ls)"
+            exit 1
+          fi
+          echo "[WORKFLOW]: scraper.py found at $SCRAPER_DIR/"
+          echo "[WORKFLOW]: Mode: ${{ steps.mode.outputs.mode }}"
+          cd "$SCRAPER_DIR"
+          python scraper.py --mode ${{ steps.mode.outputs.mode }}
+
+      - name: Save synced IDs cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: synced_ids.json
+          key: synced-ids-${{ github.run_id }}

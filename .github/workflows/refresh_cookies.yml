@@ -1,0 +1,139 @@
+name: Refresh SOL Cookies 🍪
+
+on:
+  schedule:
+    - cron: '0 3,15 * * *'  # Har 12 ghante (3 AM aur 3 PM UTC)
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright --quiet
+          playwright install chromium --with-deps
+
+      - name: Extract SOL Cookies
+        id: extract
+        run: |
+          python3 - <<'EOF'
+          import asyncio
+          import os
+
+          from playwright.async_api import async_playwright
+
+          async def get_cookies():
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch(
+                      headless=True,
+                      args=["--no-sandbox", "--disable-dev-shm-usage"]
+                  )
+                  context = await browser.new_context(
+                      user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                      locale="en-IN",
+                      timezone_id="Asia/Kolkata",
+                  )
+                  page = await context.new_page()
+
+                  all_cookies = {}
+
+                  # Step 1: Main portal (usually 200)
+                  print("Step 1: Visiting sol.du.ac.in...")
+                  try:
+                      r = await page.goto("https://sol.du.ac.in/home.php",
+                                          wait_until="domcontentloaded", timeout=60000)
+                      print(f"  Status: {r.status if r else 'No Response'}")
+                      await asyncio.sleep(5)
+                      cookies = await context.cookies()
+                      for c in cookies:
+                          if "sol.du.ac.in" in c["domain"] or "du.ac.in" in c["domain"]:
+                              all_cookies[c["name"]] = c["value"]
+                  except Exception as e:
+                      print(f"  Error: {e}")
+
+                  # Step 2: all-notices page (usually 200)
+                  print("Step 2: Visiting all-notices.php...")
+                  try:
+                      r = await page.goto("https://sol.du.ac.in/all-notices.php",
+                                          wait_until="domcontentloaded", timeout=60000)
+                      print(f"  Status: {r.status if r else 'No Response'}")
+                      await asyncio.sleep(3)
+                      cookies = await context.cookies()
+                      for c in cookies:
+                          if "sol.du.ac.in" in c["domain"] or "du.ac.in" in c["domain"]:
+                              all_cookies[c["name"]] = c["value"]
+                  except Exception as e:
+                      print(f"  Error: {e}")
+
+                  # Step 3: Try subdomain (may be 403 from GitHub IP — that's ok)
+                  print("Step 3: Attempting web.sol.du.ac.in...")
+                  try:
+                      r = await page.goto("https://web.sol.du.ac.in/home",
+                                          wait_until="domcontentloaded", timeout=30000)
+                      status = r.status if r else 0
+                      print(f"  Status: {status}")
+                      if status == 200:
+                          await asyncio.sleep(5)
+                          cookies = await context.cookies()
+                          for c in cookies:
+                              if "sol.du.ac.in" in c["domain"] or "du.ac.in" in c["domain"]:
+                                  all_cookies[c["name"]] = c["value"]
+                          print(f"  Subdomain accessible! Got {len(all_cookies)} cookies total.")
+                      else:
+                          print(f"  Subdomain blocked ({status}) from GitHub IP — using main portal cookies only.")
+                  except Exception as e:
+                      print(f"  Subdomain error (expected): {e}")
+
+                  await browser.close()
+
+                  print(f"\nAll captured cookies ({len(all_cookies)}):")
+                  for k in all_cookies:
+                      print(f"  {k}")
+
+                  if not all_cookies:
+                      print("WARNING: No SOL cookies found. Keeping existing SOL_COOKIES secret.")
+                      # Don't exit(1) — just skip the update
+                      return
+
+                  cookie_str = "; ".join(f"{k}={v}" for k, v in all_cookies.items())
+                  print(f"\nCookie string length: {len(cookie_str)} chars")
+
+                  with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                      f.write(f"cookies={cookie_str}\n")
+                      f.write("has_cookies=true\n")
+
+          asyncio.run(get_cookies())
+          EOF
+
+      - name: Update GitHub Secret (only if cookies found)
+        if: steps.extract.outputs.has_cookies == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          COOKIE_VALUE: ${{ steps.extract.outputs.cookies }}
+        run: |
+          if [ -z "$COOKIE_VALUE" ]; then
+            echo "No cookies to update."
+            exit 0
+          fi
+          echo "Updating SOL_COOKIES secret..."
+          gh secret set SOL_COOKIES --body "$COOKIE_VALUE"
+          echo "✅ SOL_COOKIES updated successfully."
+
+      - name: Skip update notice
+        if: steps.extract.outputs.has_cookies != 'true'
+        run: |
+          echo "ℹ️ No new cookies captured (web.sol.du.ac.in blocked from GitHub IP)."
+          echo "ℹ️ Existing SOL_COOKIES secret kept unchanged."
+          echo "ℹ️ To manually update: paste fresh cookies from your browser into GitHub Secrets."

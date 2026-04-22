@@ -1,0 +1,28 @@
+# ── Core ──
+playwright>=1.42.0
+requests>=2.31.0
+python-dateutil
+playwright-stealth
+beautifulsoup4>=4.12.0
+python-dotenv
+
+# ── TLS/HTTP Fingerprinting ──
+curl_cffi>=0.6.2
+httpx[http2]>=0.27.0
+cloudscraper>=1.2.71
+tls-client>=1.0.1
+
+# ── Anti-Detect Browsers ──
+patchright>=1.50.0
+nodriver>=0.38
+camoufox[geoip]>=0.4.11
+seleniumbase>=4.29.0
+undetected-chromedriver>=3.5.5
+DrissionPage>=4.1.0
+pydoll-python>=1.9.0
+scrapling>=0.2.9
+botasaurus>=3.2.0
+selenium-wire>=5.1.0
+
+# ── Proxy/Network ──
+fp-proxy>=0.1.1
