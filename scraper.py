@@ -2750,6 +2750,7 @@ puppeteer.use(StealthPlugin());
                     )
                     # ✅ SAFETY: Never auto-delete items inside folders (Recorded Classes)
                     # v89.2: Aggressive Timetable Expiration
+                    is_in_folder = bool(item.get("folderId"))
                     to_delete = False
                     if not is_in_folder:
                         # 1. Check title for specific expiry (e.g. "Dated 18.04")
