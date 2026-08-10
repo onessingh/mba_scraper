@@ -2471,10 +2471,12 @@ puppeteer.use(StealthPlugin());
                     for row in rows:
                         cols = row.find_all(["td", "th"])
                         if len(cols) >= 5:
+                            course_code = cols[3].text.strip()
                             course_name = cols[4].text.strip().upper()
-                            if "MBA" in course_name or "MASTER OF BUSINESS ADMINISTRATION" in course_name:
+                            # 771 is the exact Course Code for SOL MBA
+                            if course_code == "771":
                                 sem = cols[6].text.strip() if len(cols) >= 7 else ""
-                                title = f"[Result Declared] MBA {course_name} - Sem {sem} ({session_val})"
+                                title = f"[Result Declared] {course_name} - Sem {sem} ({session_val})"
                                 link = "https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/Combine_GradeCard.aspx"
                                 results_found.append({
                                     "title": title,
