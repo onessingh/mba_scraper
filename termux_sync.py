@@ -63,10 +63,10 @@ def run_sync(cycle_count: int = 0):
             logger.error("main_job not found in scraper core")
             return
         
-        # Deep scan once every 24 cycles (roughly 24 hours if sleep is 1 hour)
-        if cycle_count % 24 == 0:
-            logger.info("Starting synchronization job (Deep Scan Mode - 100 pages)...")
-            main_job(mode="all", allow_deletions=True, max_pages=100)
+        # Deep scan twice a day (every 12 cycles, since sleep is 1 hour)
+        if cycle_count % 12 == 0:
+            logger.info("Starting synchronization job (Deep Scan Mode - 1000 pages)...")
+            main_job(mode="all", allow_deletions=True, max_pages=1000)
         else:
             logger.info("Starting synchronization job (Quick Scan Mode - 10 pages)...")
             # Quick scan of website/notices/classes only
