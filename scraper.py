@@ -1980,16 +1980,20 @@ puppeteer.use(StealthPlugin());
                     e_date = self.extract_date_from_text(txt)
                     
                     if not e_date:
-                        # Use persistent discovery date or today's date
+                    # Use persistent discovery date or today's date
                         e_date = self.discovery_dates.get(abs_link) or datetime.datetime.now().strftime("%Y-%m-%d")
                         self.discovery_dates[abs_link] = e_date
+                        
+                    desc = "Latest MBA Resource"
+                    if "result" in clean.lower():
+                        desc += " | Check Result: https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/Combine_GradeCard.aspx"
                     
                     results.append({
                         "title": f"MBA Update: {clean}"[:100], # type: ignore
                         "link": abs_link,
                         "semester": self.extract_semester_logic(txt), # pyre-ignore[16]
                         "date": e_date,
-                        "class_time": "", "description": "Latest MBA Resource"
+                        "class_time": "", "description": desc
                     })
 
         # v100.1: Final Filter - Remove anything blacklisted by keyword or URL
