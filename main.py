@@ -37,7 +37,7 @@ def run_health_server():
     print(f"[HEALTH]: Started on port {port}")
     server.serve_forever()
 
-async def job(days_back: int = 15, targets: Optional[List[str]] = None, mode: str = "all", allow_deletions: bool = True, max_pages: int = 1000):
+async def job(days_back: int = 15, targets: Optional[List[str]] = None, mode: str = "all", allow_deletions: bool = True, max_pages: int = 100):
     """
     Main job function that runs the scraper and syncs with the backend.
     """
@@ -99,11 +99,11 @@ async def main():
             # Every 60 minutes (6th pulse of 10 min each), run EVERYTHING including classes
             if p_idx % 6 == 0:
                 print(f"\n[PULSE {p_idx}]: Triggering 1-HOUR COMPREHENSIVE scan (Website + Classes)...")
-                await job(mode="all") 
+                await job(mode="all", max_pages=100) 
             else:
                 # Every 10 minutes, run only Website and Notices scan
                 print(f"\n[PULSE {p_idx}]: Triggering 10-MINUTE WEBSITE & NOTICES scan...")
-                await job(mode="website")
+                await job(mode="website", max_pages=10)
             
             pulse_index = int(pulse_index) + 1 # type: ignore
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [SLEEP]: Pulse complete. Next pulse in 600 seconds...")
@@ -112,7 +112,7 @@ async def main():
             print(f"[MAIN][ERROR]: Loop error: {e}")
             await asyncio.sleep(60)
 
-def main_job(mode="all", allow_deletions: bool = True, max_pages: int = 1000):
+def main_job(mode="all", allow_deletions: bool = True, max_pages: int = 100):
     """
     Synchronous wrapper for the job function, easily callable from external scripts.
     """

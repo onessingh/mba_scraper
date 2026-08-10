@@ -65,12 +65,12 @@ def run_sync(cycle_count: int = 0):
         
         # Deep scan once every 24 cycles (roughly 24 hours if sleep is 1 hour)
         if cycle_count % 24 == 0:
-            logger.info("Starting synchronization job (Deep Scan Mode - 1000 pages)...")
-            main_job(mode="all", allow_deletions=False, max_pages=1000)
+            logger.info("Starting synchronization job (Deep Scan Mode - 100 pages)...")
+            main_job(mode="all", allow_deletions=True, max_pages=100)
         else:
             logger.info("Starting synchronization job (Quick Scan Mode - 10 pages)...")
             # Quick scan of website/notices/classes only
-            main_job(mode="website", allow_deletions=False, max_pages=10)
+            main_job(mode="website", allow_deletions=True, max_pages=10)
         logger.info("Synchronization completed successfully.")
         
     except Exception as e:
