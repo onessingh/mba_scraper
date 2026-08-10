@@ -27,7 +27,7 @@ def check_and_install_deps():
             subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
             logger.info(f"{pkg} installed successfully.")
 
-def run_sync():
+def run_sync(cycle_count: int = 0):
     """Execute the scraper and sync with backend."""
     try:
         import importlib.util
@@ -63,9 +63,14 @@ def run_sync():
             logger.error("main_job not found in scraper core")
             return
         
-        logger.info("Starting synchronization job (Additive Mode)...")
-        # Set allow_deletions=False so Termux only supplements Render scraper
-        main_job(mode="all", allow_deletions=False)
+        # Deep scan once every 24 cycles (roughly 24 hours if sleep is 1 hour)
+        if cycle_count % 24 == 0:
+            logger.info("Starting synchronization job (Deep Scan Mode - 1000 pages)...")
+            main_job(mode="all", allow_deletions=False, max_pages=1000)
+        else:
+            logger.info("Starting synchronization job (Quick Scan Mode - 10 pages)...")
+            # Quick scan of website/notices/classes only
+            main_job(mode="website", allow_deletions=False, max_pages=10)
         logger.info("Synchronization completed successfully.")
         
     except Exception as e:
@@ -82,10 +87,12 @@ def main():
         logger.info("Please run 'pkg install python' and 'pip install requests' manually if this persists.")
     
     # 2. Infinite Loop
+    cycle_count = 0
     while True:
-        logger.info("--- Cycle Starting ---")
-        run_sync()
+        logger.info(f"--- Cycle Starting (Count: {cycle_count}) ---")
+        run_sync(cycle_count)
         
+        cycle_count += 1
         wait_time = 3600 # 1 hour
         logger.info(f"Cycle finished. Waiting {wait_time/60:.0f} minutes for next run...")
         time.sleep(wait_time)

@@ -37,7 +37,7 @@ def run_health_server():
     print(f"[HEALTH]: Started on port {port}")
     server.serve_forever()
 
-async def job(days_back: int = 15, targets: Optional[List[str]] = None, mode: str = "all", allow_deletions: bool = True):
+async def job(days_back: int = 15, targets: Optional[List[str]] = None, mode: str = "all", allow_deletions: bool = True, max_pages: int = 1000):
     """
     Main job function that runs the scraper and syncs with the backend.
     """
@@ -51,7 +51,7 @@ async def job(days_back: int = 15, targets: Optional[List[str]] = None, mode: st
     
     print(f"\n[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [JOB]: Starting MBA Scraper | Mode: {mode} | Deletions: {allow_deletions}")
     try:
-        results: List[Dict[str, Any]] = await scraper.run(days_back=days_back, mode=mode, targets=targets)
+        results: List[Dict[str, Any]] = await scraper.run(days_back=days_back, mode=mode, targets=targets, max_pages=max_pages)
         results = results if results is not None else []
         print(f"[JOB]: Found {len(results)} possible MBA items.")
         
@@ -112,7 +112,7 @@ async def main():
             print(f"[MAIN][ERROR]: Loop error: {e}")
             await asyncio.sleep(60)
 
-def main_job(mode="all", allow_deletions: bool = True):
+def main_job(mode="all", allow_deletions: bool = True, max_pages: int = 1000):
     """
     Synchronous wrapper for the job function, easily callable from external scripts.
     """
@@ -127,11 +127,11 @@ def main_job(mode="all", allow_deletions: bool = True):
         try:
             import nest_asyncio # type: ignore
             nest_asyncio.apply()
-            loop.create_task(job(mode=mode, allow_deletions=allow_deletions))
+            loop.create_task(job(mode=mode, allow_deletions=allow_deletions, max_pages=max_pages))
         except ImportError:
             print("[WARN]: nest_asyncio not found. Task might not run correctly inside existing loop.")
     else:
-        loop.run_until_complete(job(mode=mode, allow_deletions=allow_deletions))
+        loop.run_until_complete(job(mode=mode, allow_deletions=allow_deletions, max_pages=max_pages))
 
 if __name__ == "__main__":
     asyncio.run(main())

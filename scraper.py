@@ -2429,11 +2429,72 @@ puppeteer.use(StealthPlugin());
                 
         return results
 
+    async def scrape_du_declared_results(self) -> List[Dict[str, Any]]:
+        results_found = []
+        try:
+            print("[DU-RESULTS]: Checking List_Of_Declared_Results_V2.aspx...")
+            url = "https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/List_Of_Declared_Results_V2.aspx"
+            req = cffi_requests if cffi_requests else requests
+            
+            # 1. Fetch the page to get ViewState and dropdown options
+            res1 = req.get(url, verify=False, timeout=20)
+            soup = BeautifulSoup(res1.text, "html.parser")
+            viewstate = soup.find("input", id="__VIEWSTATE")
+            viewstategen = soup.find("input", id="__VIEWSTATEGENERATOR")
+            eventval = soup.find("input", id="__EVENTVALIDATION")
+            
+            if not (viewstate and viewstategen and eventval):
+                print("[DU-RESULTS]: Failed to extract form state. Skipping.")
+                return results_found
+                
+            # 2. Get top 2 recent sessions
+            select = soup.find("select", id="ddlexamsession")
+            if not select:
+                return results_found
+            options = select.find_all("option")
+            sessions = [opt["value"] for opt in options if opt["value"] != "--"][:1]
+            
+            # 3. For each session, post the form and parse table
+            for session_val in sessions:
+                data = {
+                    "__VIEWSTATE": viewstate["value"],
+                    "__VIEWSTATEGENERATOR": viewstategen["value"],
+                    "__EVENTVALIDATION": eventval["value"],
+                    "ddlexamsession": session_val,
+                    "btnsearch": "Search Details"
+                }
+                res2 = req.post(url, data=data, verify=False, timeout=30)
+                soup2 = BeautifulSoup(res2.text, "html.parser")
+                table = soup2.find("table", id="gvshow")
+                if table:
+                    rows = table.find_all("tr")
+                    for row in rows:
+                        cols = row.find_all(["td", "th"])
+                        if len(cols) >= 5:
+                            course_name = cols[4].text.strip().upper()
+                            if "MBA" in course_name or "MASTER OF BUSINESS ADMINISTRATION" in course_name:
+                                sem = cols[6].text.strip() if len(cols) >= 7 else ""
+                                title = f"[Result Declared] MBA {course_name} - Sem {sem} ({session_val})"
+                                link = "https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/Combine_GradeCard.aspx"
+                                results_found.append({
+                                    "title": title,
+                                    "link": link,
+                                    "semester": "1" if "I" == sem else ("2" if "II" == sem else ("3" if "III" == sem else ("4" if "IV" == sem else "0"))),
+                                    "date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                                    "description": f"DU Result declared for {course_name} ({session_val}). Check Marksheet link.",
+                                    "type": "results"
+                                })
+            print(f"[DU-RESULTS]: Found {len(results_found)} MBA results.")
+        except Exception as e:
+            print(f"[DU-RESULTS]: Error fetching results: {e}")
+            
+        return results_found
+
     # ═══════════════════════════════════════════
     # MASTER RUN
     # ═══════════════════════════════════════════
     async def run(self: Any, days_back: int = 15, mode: str = "all",
-                  targets: Optional[List[str]] = None) -> list:
+                  targets: Optional[List[str]] = None, max_pages: int = 1000) -> list:
         
         is_termux = os.environ.get("IS_TERMUX", "false").lower() == "true"
         
@@ -2443,6 +2504,10 @@ puppeteer.use(StealthPlugin());
             # 1. PG Time Table (Now API-Driven, works on any host!)
             pg_tt = await self.scrape_pg_timetables()
             self.notices.extend(pg_tt)
+            
+            # 1b. DU Declared Results
+            du_res = await self.scrape_du_declared_results()
+            self.notices.extend(du_res)
 
             if is_termux:
                 # ── Termux Exclusive: Heavy Browser Tasks ──
@@ -2454,12 +2519,22 @@ puppeteer.use(StealthPlugin());
                 if "https://web.sol.du.ac.in/info/online-class-schedule" in self.discovery_queue:
                     self.discovery_queue.remove("https://web.sol.du.ac.in/info/online-class-schedule")
             
-            await self.discover_and_crawl(max_pages=1000)
+            await self.discover_and_crawl(max_pages=max_pages)
             print(f"[SUMMARY]: Total MBA items: {len(self.notices)}")
 
         elif mode == "website":
             print("[OMNI]: WEBSITE & NOTICES scan")
-            for url in ["https://sol.du.ac.in/all-notices.php", "https://sol.du.ac.in/home.php"]:
+            for url in [
+                "https://sol.du.ac.in/all-notices.php", 
+                "https://sol.du.ac.in/home.php",
+                "https://web.sol.du.ac.in/info/all-pg-class-time-table-sem-3-and-5",
+                "https://web.sol.du.ac.in/info/online-class-schedule",
+                "https://web.sol.du.ac.in/my/team_schedules/vcs.php",
+                "https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/Combine_GradeCard.aspx?Payload=5aFvikMWnmDFzOo8VG5YV6K4nnL7lXGGaLgSrUJMV-Y",
+                "https://exam.du.ac.in/exam/index.php/notifications?category=RESULT",
+                "https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/List_Of_Declared_Results_V2.aspx",
+                "https://sol.du.ac.in/time_table.php"
+            ]:
                 html = await self.fetch_cffi(url)
                 if html:
                     self.current_url = url
@@ -2468,7 +2543,15 @@ puppeteer.use(StealthPlugin());
                         if not any(n["link"] == item["link"] for n in self.notices):
                             print(f"  [✔ FOUND]: {item['title']}")
                             self.notices.append(item)
-            await self.discover_and_crawl(max_pages=1000)
+                            
+            # Add DU Results checking manually
+            du_res = await self.scrape_du_declared_results()
+            for r in du_res:
+                if not any(n["title"] == r["title"] for n in self.notices):
+                    print(f"  [✔ FOUND]: {r['title']}")
+                    self.notices.append(r)
+                            
+            await self.discover_and_crawl(max_pages=max_pages)
             print(f"[SUMMARY]: {len(self.notices)} items found")
 
         elif mode == "classes":
