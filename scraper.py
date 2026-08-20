@@ -1888,7 +1888,7 @@ puppeteer.use(StealthPlugin());
                             self.discovery_dates[abs_link] = e_date
                         
                         results.append({
-                            "title": ("MBA Update: " + re.sub(r'^\[.*?\]\s*', '', txt).strip())[:100], # type: ignore
+                            "title": re.sub(r'^\[.*?\]\s*', '', txt).strip()[:100], # type: ignore
                             "link": abs_link,
                             "semester": self.extract_semester_logic(txt),
                             "date": e_date,
@@ -1989,7 +1989,7 @@ puppeteer.use(StealthPlugin());
                         desc += " | Check Result: https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/Combine_GradeCard.aspx"
                     
                     results.append({
-                        "title": f"MBA Update: {clean}"[:100], # type: ignore
+                        "title": clean[:100], # type: ignore
                         "link": abs_link,
                         "semester": self.extract_semester_logic(txt), # pyre-ignore[16]
                         "date": e_date,
@@ -2016,8 +2016,10 @@ puppeteer.use(StealthPlugin());
             
         results = final_filtered
 
-        # Year filter
+        # 3-Month Date Filter
         filtered, seen_links = [], set()
+        cutoff_date = datetime.datetime.now() - datetime.timedelta(days=90)
+        
         for item in results:
             # FIX: Don't deduplicate #pending links, they are placeholders for different classes
             link = item.get("link", "#pending")
@@ -2026,17 +2028,14 @@ puppeteer.use(StealthPlugin());
             
             try:
                 date_str = str(item.get("date", ""))
-                if "-" in date_str:
-                    yr_part = date_str.split("-")[0]
-                    yr = int(yr_part)
-                else:
-                    yr = self.current_year
-            except (ValueError, IndexError, TypeError):
-                yr = self.current_year
+                item_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                is_recent = item_date >= cutoff_date
+            except Exception:
+                # Fallback if date is missing or weird
+                is_recent = True
             
-            # v83.28: Allow current year, future years, and a 1-year past buffer (Current - 1)
-            # This ensures 2025 data is allowed during 2026, but 2024 is blocked.
-            if yr >= (self.current_year - 1):
+            # Allow if within last 90 days
+            if is_recent:
                 filtered.append(item)
                 if link != "#pending":
                     seen_links.add(link)
@@ -2809,7 +2808,7 @@ puppeteer.use(StealthPlugin());
                     b_id = b_item.get("_id") or b_item.get("id")
                     # ✅ SAFETY: Only delete if link is missing AND it's a ROOT item (no folderId)
                     # This prevents deleting Recorded Classes that have been moved to folders.
-                    if b_link and b_link != "#pending" and not b_item.get("folderId") and b_link not in scrape_links:
+                    if b_link and b_link != "#pending" and not b_item.get("folderId") and not b_item.get("isPinned") and b_link not in scrape_links:
                         # Extra check: Only delete if date is still current/future
                         # (Past dates are handled by cleanup_old_data anyway)
                         print(f"  [SYNC-DELETE]: Item removed from SOL -> {b_item.get('title')[:50]}")
