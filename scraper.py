@@ -370,7 +370,7 @@ class MBAScraper:
         self.target_mode = target_mode
         self.force_sync = force_sync
         self.base_url = "https://sol.du.ac.in"
-        self.keywords = ['MBA', 'Master of Business Administration']
+        self.keywords = ['MBA', 'M.B.A', 'M.B.A.', 'Master of Business Administration']
         self.visited = set()
         self.notices = []
         self.discovery_queue = [
