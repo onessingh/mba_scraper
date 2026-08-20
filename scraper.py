@@ -2665,18 +2665,6 @@ puppeteer.use(StealthPlugin());
                     print(f"  [SYNC-SKIP]: Class already ended today -> {title}")
                     continue
             
-            # v101.1: Auto-expire timetables or generic class notices after 8 days
-            if ("time table" in l_title or "[timetable]" in l_title or "schedule" in l_title):
-                item_date_str = item.get("date")
-                if item_date_str:
-                    try:
-                        disc_dt = datetime.datetime.strptime(item_date_str, "%Y-%m-%d")
-                        if (datetime.datetime.now() - disc_dt).days > 8:
-                            print(f"  [SYNC-SKIP]: Timetable older than 8 days -> {title}")
-                            continue
-                    except Exception:
-                        pass
-            
             # Ensure scheduledAt is set even if make_iso_scheduled failed (fallback to date only)
             if not item.get("scheduledAt") and item.get("date"):
                 item["scheduledAt"] = f"{item['date']}T00:00:00"
