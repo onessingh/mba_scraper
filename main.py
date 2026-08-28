@@ -11,6 +11,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import List, Optional, Any, Dict # Added typing imports
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
     import requests # type: ignore
 except ImportError:
     pass
