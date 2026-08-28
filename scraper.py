@@ -2514,16 +2514,11 @@ puppeteer.use(StealthPlugin());
             du_res = await self.scrape_du_declared_results()
             self.notices.extend(du_res)
 
-            if is_termux:
-                # ── Termux Exclusive: Heavy Browser Tasks ──
-                # 2. Class Schedule Chain (vcs.php handles its own Playwright)
-                self.notices.extend(await self.run_class_chain())
-            else:
-                print("[OMNI]: Non-Termux host. Skipping heavier Class Chain (delegated to phone).")
-                # Remove schedule URL from crawler queue so it doesn't discover it
-                if "https://web.sol.du.ac.in/info/online-class-schedule" in self.discovery_queue:
-                    self.discovery_queue.remove("https://web.sol.du.ac.in/info/online-class-schedule")
+            # ── Heavy Browser Tasks (Now running on Oracle natively) ──
+            # 2. Class Schedule Chain (vcs.php handles its own Playwright)
+            self.notices.extend(await self.run_class_chain())
             
+
             await self.discover_and_crawl(max_pages=max_pages)
             print(f"[SUMMARY]: Total MBA items: {len(self.notices)}")
 
