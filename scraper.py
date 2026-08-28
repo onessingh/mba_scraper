@@ -2268,6 +2268,14 @@ puppeteer.use(StealthPlugin());
         # CLEANING: Remove any date patterns [YYYY-MM-DD], [DD-MM-YYYY], etc.
         cleaned_text = re.sub(r"\[?\d{1,4}[-/]\d{1,4}[-/]\d{1,4}\]?", "", text)
         t = cleaned_text.upper().replace("-", " ").replace(".", " ")
+
+        # ── ADMISSION ITEMS: Merit lists, Discrepancy lists, Hall Tickets ──────
+        # "First/Second Merit List" refers to ADMISSION ROUNDS, not semesters.
+        # These always belong to Sem 1 (ongoing admissions/new students).
+        ADMISSION_KEYWORDS = ["MERIT LIST", "DISCREPANCY", "HALL TICKET"]
+        if any(kw in t for kw in ADMISSION_KEYWORDS):
+            return "1"
+
         if "1ST" in t or "FIRST" in t:
             return "1"
         if "2ND" in t or "SECOND" in t:
