@@ -1607,20 +1607,38 @@ puppeteer.use(StealthPlugin());
     # ═══════════════════════════════════════════
     async def fetch_cffi(self, url: str) -> Optional[str]:
         self.current_url = url
+        html = None
         if cffi_requests is None:
             # Fallback to plain requests
             try:
                 r = requests.get(url, headers={"User-Agent": self.user_agent}, timeout=20)
-                return r.text if r.status_code == 200 else None
+                html = r.text if r.status_code == 200 else None
             except Exception:
-                return None
-        try:
-            session = cffi_requests.Session(impersonate="chrome124") # type: ignore
-            h = self._iframe_headers() if "vcs.php" in url else {"User-Agent": self.user_agent}
-            r = session.get(url, headers=h, timeout=30)
-            return r.text if r.status_code == 200 else None
-        except Exception:
-            return None
+                html = None
+        else:
+            try:
+                session = cffi_requests.Session(impersonate="chrome124") # type: ignore
+                h = self._iframe_headers() if "vcs.php" in url else {"User-Agent": self.user_agent}
+                r = session.get(url, headers=h, timeout=30)
+                html = r.text if r.status_code == 200 else None
+            except Exception:
+                html = None
+
+        # M13 CF-Worker fallback: if blocked (None), try Cloudflare Worker proxy
+        if not html and self.keys.get("CF_WORKER"):
+            try:
+                loop = asyncio.get_event_loop()
+                def _cf_run():
+                    import requests as req
+                    resp = req.get(self.keys["CF_WORKER"], params={"url": url}, timeout=40)
+                    return resp.text if resp.status_code == 200 else None
+                html = await loop.run_in_executor(None, _cf_run)
+                if html:
+                    print(f"  [CRAWLER][CF-WORKER]: Bypass OK for {url}")
+            except Exception:
+                html = None
+
+        return html
 
     async def fetch_wayback(self, url: str) -> Optional[str]:
         self.current_url = url
@@ -1742,6 +1760,7 @@ puppeteer.use(StealthPlugin());
             # ── Fast HTTP methods (no browser) ──
             fast_methods = [
                 ("M01-CFFI",           lambda: self.m01_cffi(url)),
+                ("M13-CF-WORKER",      lambda: self.m13_cf_worker(url)),  # moved up — best bypass
                 ("M02-TLS-CLIENT",     lambda: self.m02_tls_client(url)),
                 ("M03-HTTPX-H2",       lambda: self.m03_httpx(url)),
                 ("M04-CLOUDSCRAPER",   lambda: self.m04_cloudscraper(url)),
@@ -1753,7 +1772,6 @@ puppeteer.use(StealthPlugin());
                 ("M10-YANDEX",         lambda: self.m10_yandex_cache(url)),
                 ("M11-COMMONCRAWL",    lambda: self.m11_commoncrawl(url)),
                 ("M12-CACHEDVIEW",     lambda: self.m12_cachedview(url)),
-                ("M13-CF-WORKER",      lambda: self.m13_cf_worker(url)),
                 ("M14-VERCEL",         lambda: self.m14_vercel(url)),
                 ("M15-NETLIFY",        lambda: self.m15_netlify(url)),
                 ("M16-TOR",            lambda: self.m16_tor(url)),
