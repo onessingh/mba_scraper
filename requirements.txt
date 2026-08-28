@@ -25,4 +25,3 @@ botasaurus>=3.2.0
 selenium-wire>=5.1.0
 
 # ── Proxy/Network ──
-fp-proxy>=0.1.1
