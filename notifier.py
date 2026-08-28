@@ -113,7 +113,8 @@ class Notifier:
 
     def get_from_website(self, semester, category='notifications'):
         url = f"{self.website_api_url}/api/sol/{category}/{semester}"
-        resp = self._request_with_retry("GET", url)
+        headers = {"x-scraper-key": self.scraper_key, "User-Agent": "SolmatesScraper/1.0 (Official)"}
+        resp = self._request_with_retry("GET", url, headers=headers)
         if resp and resp.status_code == 200:
             try:
                 data = resp.json().get('data')
