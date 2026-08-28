@@ -2539,6 +2539,10 @@ puppeteer.use(StealthPlugin());
 
             await self.discover_and_crawl(max_pages=max_pages)
             print(f"[SUMMARY]: Total MBA items: {len(self.notices)}")
+            print("[SUMMARY]: ═══ ITEMS FOUND ═══")
+            for idx, n in enumerate(self.notices, 1):
+                print(f"{idx:02d}. {n.get('title', 'No Title')}")
+            print("══════════════════════════════")
 
         elif mode == "website":
             print("[OMNI]: WEBSITE & NOTICES scan")
