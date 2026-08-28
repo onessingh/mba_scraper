@@ -102,14 +102,14 @@ async def main():
     while True:
         try:
             p_idx: int = int(pulse_index)
-            # Every 12 hours (72nd pulse of 10 min each), run EVERYTHING including classes
-            if p_idx % 72 == 0:
-                print(f"\n[PULSE {p_idx}]: Triggering 12-HOUR COMPREHENSIVE scan (Website + Classes)...")
+            # Every 1 hour (6th pulse of 10 min each), run SUPER DEEP scan (1000 pages)
+            if p_idx % 6 == 0:
+                print(f"\n[PULSE {p_idx}]: Triggering 1-HOUR SUPER DEEP scan (1000 pages)...")
                 await job(mode="all", max_pages=1000) 
             else:
-                # Every 10 minutes, run only Website and Notices scan
-                print(f"\n[PULSE {p_idx}]: Triggering 10-MINUTE WEBSITE & NOTICES scan...")
-                await job(mode="website", max_pages=10)
+                # Every 10 minutes, run FULL scan (100 pages) instead of 10 pages
+                print(f"\n[PULSE {p_idx}]: Triggering 10-MINUTE FULL scan (100 pages)...")
+                await job(mode="all", max_pages=100)
             
             pulse_index = int(pulse_index) + 1 # type: ignore
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [SLEEP]: Pulse complete. Next pulse in 600 seconds...")
