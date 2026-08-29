@@ -61,6 +61,25 @@ async def job(days_back: int = 15, targets: Optional[List[str]] = None, mode: st
         results = results if results is not None else []
         print(f"[JOB]: Found {len(results)} possible MBA items.")
         
+        if len(results) == 0:
+            print("[JOB]: 0 items found. Running SMART CHECK to see if DU SOL is down or Scraper is blocked...")
+            is_sol_up = False
+            ant_key = os.environ.get("SCRAPER_ANT_KEY", "")
+            if ant_key:
+                try:
+                    check_url = f"https://api.scraperant.com/v2/general?url=https://web.sol.du.ac.in&x-api-key={ant_key}"
+                    r = requests.get(check_url, timeout=30)
+                    if r.status_code == 200 and "sol" in r.text.lower():
+                        is_sol_up = True
+                except Exception as e:
+                    print(f"[SMART CHECK] Error checking SOL status: {e}")
+            
+            if is_sol_up:
+                alert_msg = "🚨 *SOLMATES SCRAPER ALERT* 🚨\n\nScraper run finished with 0 items, BUT ScrapingAnt confirms that the DU SOL website is *UP*!\n\nThis means the Oracle Scraper might have been completely blocked or the layout changed. Please check the logs."
+                notifier.send_telegram_alert(alert_msg)
+            else:
+                print("[SMART CHECK]: DU SOL website seems to be genuinely DOWN. No alert sent.")
+        
         # Sync logic (BULK SYNC) - Optimized for accuracy and deletions
         scraper.sync_results(results, notifier, "synced_ids.json", allow_deletions=allow_deletions)
                     

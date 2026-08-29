@@ -21,14 +21,20 @@ class Notifier:
         """
         print(f"[WHATSAPP ALERT]: {message}")
         if self.ultra_msg_token and self.ultra_msg_instance:
-            # url = f"https://api.ultramsg.com/{self.ultra_msg_instance}/messages/chat"
-            # payload = {
-            #     "token": self.ultra_msg_token,
-            #     "to": "GROUP_ID",
-            #     "body": message
-            # }
-            # requests.post(url, data=payload)
             pass
+
+    def send_telegram_alert(self, message):
+        import os
+        bot_token = os.environ.get("TG_BOT_TOKEN")
+        chat_id = os.environ.get("TG_CHAT_ID")
+        if bot_token and chat_id:
+            try:
+                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+                requests.post(url, json=payload, timeout=10)
+                print("[TELEGRAM ALERT]: Alert sent successfully.")
+            except Exception as e:
+                print(f"[TELEGRAM ALERT][ERROR]: {e}")
 
     def _request_with_retry(self, method, url, max_retries=3, **kwargs):
         """Generic request wrapper with basic retry logic"""
