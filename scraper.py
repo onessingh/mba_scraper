@@ -2393,6 +2393,7 @@ puppeteer.use(StealthPlugin());
         today = datetime.datetime.now()
         
         for sem_val, folder_id in folders:
+            await asyncio.sleep(2)  # Delay to prevent rate-limiting by CF Worker or SOL server
             try:
                 print(f"  [PG-API]: Fetching folder {folder_id}...")
                 url = f"{base_api}&id={folder_id}"
