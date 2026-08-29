@@ -2402,7 +2402,16 @@ puppeteer.use(StealthPlugin());
                 
                 # Standard pattern to avoid lint errors with run_in_executor
                 def _do_get(u, h):
-                    return requests.get(u, headers=h, timeout=20, verify=False).json()
+                    import urllib.parse
+                    # Bypass DU SOL 403 blocks for Cloud IPs by routing through CF worker proxy
+                    cf_worker = "https://wandering-king-73d7.riekgamer221206.workers.dev/?url="
+                    safe_url = urllib.parse.quote(u, safe='')
+                    try:
+                        # Attempt direct first (for residential IPs)
+                        return requests.get(u, headers=h, timeout=10, verify=False).json()
+                    except Exception:
+                        # Fallback to CF Worker (for Oracle/Cloud IPs)
+                        return requests.get(cf_worker + safe_url, headers=h, timeout=20, verify=False).json()
                 
                 nodes = await loop.run_in_executor(None, _do_get, url, {"User-Agent": self.user_agent})
                 if not isinstance(nodes, list):
