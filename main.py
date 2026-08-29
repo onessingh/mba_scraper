@@ -67,7 +67,7 @@ async def job(days_back: int = 15, targets: Optional[List[str]] = None, mode: st
             ant_key = os.environ.get("SCRAPER_ANT_KEY", "")
             if ant_key:
                 try:
-                    check_url = f"https://api.scraperant.com/v2/general?url=https://web.sol.du.ac.in&x-api-key={ant_key}"
+                    check_url = f"https://api.scrapingant.com/v2/general?url=https://web.sol.du.ac.in&x-api-key={ant_key}"
                     r = requests.get(check_url, timeout=30)
                     if r.status_code == 200 and "sol" in r.text.lower():
                         is_sol_up = True

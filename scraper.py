@@ -1001,7 +1001,7 @@ class MBAScraper:
         try:
             loop = asyncio.get_event_loop()
             def _run():
-                api = f"https://api.scraperant.com/v2/general?url={url}&x-api-key={self.keys['ANT']}&browser=true"
+                api = f"https://api.scrapingant.com/v2/general?url={url}&x-api-key={self.keys['ANT']}&browser=true"
                 return requests.get(api, timeout=60).text
             return await loop.run_in_executor(None, _run) # type: ignore
         except Exception as e:
