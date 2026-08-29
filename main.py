@@ -132,6 +132,29 @@ async def main():
             
             pulse_index = int(pulse_index) + 1 # type: ignore
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [SLEEP]: Pulse complete. Next pulse in 600 seconds...")
+            
+            # ── CONFIDENCE NOTIFICATIONS: First 5 runs ke baad Telegram pe alert ──
+            if pulse_index <= 5:
+                try:
+                    tg_token = os.environ.get("TG_BOT_TOKEN", "")
+                    tg_chat  = os.environ.get("TG_CHAT_ID", "")
+                    if tg_token and tg_chat:
+                        scan_type = "🔭 DEEP (1000 pages)" if (p_idx % 6 == 0) else "⚡ QUICK (100 pages)"
+                        msg = (
+                            f"✅ Run #{pulse_index}/5 Complete!\n\n"
+                            f"🖥 Oracle scraper apna kaam kar raha hai!\n"
+                            f"📋 Scan: {scan_type}\n"
+                            f"🕐 Time: {datetime.datetime.now().strftime('%d %b %Y, %I:%M %p')}\n\n"
+                            f"{'🎉 Ab aage notifications band! System 24x7 autonomous mode mein hai.' if pulse_index == 5 else f'⏳ Next run ~10 min mein...'}"
+                        )
+                        requests.post(
+                            f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                            data={"chat_id": tg_chat, "text": msg},
+                            timeout=10
+                        )
+                except Exception as tg_err:
+                    print(f"[TG-PULSE]: Notification error: {tg_err}")
+            
             await asyncio.sleep(600)
         except Exception as e:
             print(f"[MAIN][ERROR]: Loop error: {e}")
