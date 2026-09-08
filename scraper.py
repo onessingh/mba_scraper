@@ -1886,23 +1886,76 @@ puppeteer.use(StealthPlugin());
     # ═══════════════════════════════════════════
     def normalize_sol_url(self, url: str) -> str:
         """
-        SOL server stores PDFs with underscores, but HTML hrefs often have spaces
-        (encoded as %20). This converts %20 → _ ONLY in the filename part of
-        sol.du.ac.in URLs so links don't 404.
-        Example:
-          MBA%203rd%20Merit%20List.pdf  →  MBA_3rd_Merit_List.pdf
+        SOL is INCONSISTENT — some PDFs use underscores, some use spaces (%20).
+        Strategy:
+          1. Clean up literal spaces to %20.
+          2. If not a PDF on sol.du.ac.in, return as-is.
+          3. Check cache to avoid repeat HEAD requests.
+          4. Quick HEAD request on test_url.
+             - If 200 OK -> keep test_url!
+             - If 404 and %20 in url -> try replacing %20 with underscores. If 200 OK -> return underscore_url!
+             - If 404 and _ in url -> try replacing _ with %20 in filename. If 200 OK -> return space_url!
+          5. If all fail or timeout -> return test_url safely.
         """
         if not url or "sol.du.ac.in" not in url:
             return url
+        url = url.strip()
+        test_url = url.replace(" ", "%20")
+
+        # Only apply to PDF links
+        if not test_url.lower().split("?")[0].endswith(".pdf"):
+            return test_url
+
+        if "%20" not in test_url and "_" not in test_url:
+            return test_url
+
+        if not hasattr(self, "_url_cache"):
+            self._url_cache: dict = {}
+        if test_url in self._url_cache:
+            return self._url_cache[test_url]
+
         try:
             from urllib.parse import urlparse, urlunparse, unquote
-            parsed = urlparse(url)
-            # Decode %20 back to spaces, then replace spaces with underscores in path
-            decoded_path = unquote(parsed.path)
-            fixed_path = decoded_path.replace(" ", "_")
-            return urlunparse(parsed._replace(path=fixed_path))
+            import requests as _req
+            headers = {"User-Agent": getattr(self, "user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")}
+
+            # 1. Quick HEAD to check if original URL works
+            r = _req.head(test_url, headers=headers, timeout=5, verify=False, allow_redirects=True)
+            if r.status_code == 200:
+                self._url_cache[test_url] = test_url
+                return test_url
+
+            # 2. 404 and has %20: try underscore version
+            if "%20" in test_url:
+                parsed = urlparse(test_url)
+                decoded_path = unquote(parsed.path)
+                fixed_path = decoded_path.replace(" ", "_")
+                underscore_url = urlunparse(parsed._replace(path=fixed_path))
+                r2 = _req.head(underscore_url, headers=headers, timeout=5, verify=False, allow_redirects=True)
+                if r2.status_code == 200:
+                    print(f"  [URL-FIX]: ✅ underscore worked → {underscore_url.split('/')[-1]}")
+                    self._url_cache[test_url] = underscore_url
+                    return underscore_url
+
+            # 3. 404 and has _: try space version (%20)
+            if "_" in test_url:
+                parsed = urlparse(test_url)
+                parts = parsed.path.rsplit('/', 1)
+                if len(parts) == 2:
+                    filename = parts[1].replace("_", "%20")
+                    space_url = urlunparse(parsed._replace(path=parts[0] + '/' + filename))
+                    r3 = _req.head(space_url, headers=headers, timeout=5, verify=False, allow_redirects=True)
+                    if r3.status_code == 200:
+                        print(f"  [URL-FIX]: ✅ space worked → {space_url.split('/')[-1]}")
+                        self._url_cache[test_url] = space_url
+                        return space_url
+
+            # Fallback
+            self._url_cache[test_url] = test_url
+            return test_url
         except Exception:
-            return url
+            # Network error → return test_url safely
+            return test_url
 
     # ═══════════════════════════════════════════
     # PARSING
