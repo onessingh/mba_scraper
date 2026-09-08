@@ -1882,6 +1882,29 @@ puppeteer.use(StealthPlugin());
 
 
     # ═══════════════════════════════════════════
+    # URL NORMALIZER — Fix %20 spaces → underscores for SOL PDFs
+    # ═══════════════════════════════════════════
+    def normalize_sol_url(self, url: str) -> str:
+        """
+        SOL server stores PDFs with underscores, but HTML hrefs often have spaces
+        (encoded as %20). This converts %20 → _ ONLY in the filename part of
+        sol.du.ac.in URLs so links don't 404.
+        Example:
+          MBA%203rd%20Merit%20List.pdf  →  MBA_3rd_Merit_List.pdf
+        """
+        if not url or "sol.du.ac.in" not in url:
+            return url
+        try:
+            from urllib.parse import urlparse, urlunparse, unquote
+            parsed = urlparse(url)
+            # Decode %20 back to spaces, then replace spaces with underscores in path
+            decoded_path = unquote(parsed.path)
+            fixed_path = decoded_path.replace(" ", "_")
+            return urlunparse(parsed._replace(path=fixed_path))
+        except Exception:
+            return url
+
+    # ═══════════════════════════════════════════
     # PARSING
     # ═══════════════════════════════════════════
     def _parse_html(self, html: str) -> List[Dict[str, Any]]:
@@ -1895,7 +1918,7 @@ puppeteer.use(StealthPlugin());
                 for a in imp_div.find_all("a", href=True):  # type: ignore
                     txt = a.get_text().strip()
                     if txt:
-                        abs_link = urljoin(self.current_url, a["href"])
+                        abs_link = self.normalize_sol_url(urljoin(self.current_url, a["href"]))
                         
                         # Use extracted date if available
                         e_date = self.extract_date_from_text(txt)
@@ -1966,7 +1989,7 @@ puppeteer.use(StealthPlugin());
                      for a in [c.find("a")] if a and a.get("href")),
                     "#pending"
                 )
-                abs_link = urljoin(self.current_url, raw_href) if raw_href != "#pending" else "#pending" # type: ignore
+                abs_link = self.normalize_sol_url(urljoin(self.current_url, raw_href)) if raw_href != "#pending" else "#pending" # type: ignore
                 
                 # Standardize date and parse
                 clean_date = str(current_date).replace('/', '-')
@@ -1990,7 +2013,7 @@ puppeteer.use(StealthPlugin());
                 # v75.4: UNBLOCKED - Allowing all MBA updates
                 # if any(bad in txt.lower() for bad in ["study material", "syllabus", "course structure", "merit list", "list of candidates"]):
                 #     continue
-                abs_link = urljoin(self.current_url, a["href"]) # pyre-ignore[16]
+                abs_link = self.normalize_sol_url(urljoin(self.current_url, a["href"])) # pyre-ignore[16]
                 if abs_link not in seen:
                     clean = re.sub(r"^\[.*?\]\s*", "", txt).strip()
                     
