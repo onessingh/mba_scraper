@@ -1667,13 +1667,13 @@ puppeteer.use(StealthPlugin());
         """
         SOL_DOMAINS = ("sol.du.ac.in", "web.sol.du.ac.in")
 
-        # Seed both subdomains if not already in queue
         extra_seeds = [
+            "https://sol.du.ac.in/time_table.php",
+            "https://sol.du.ac.in/all-notices.php",
+            "https://sol.du.ac.in/home.php",
             "https://web.sol.du.ac.in/home",
             "https://web.sol.du.ac.in/info/student-support",
             "https://web.sol.du.ac.in/info/online-class-schedule",
-            "https://sol.du.ac.in/all-notices.php",
-            "https://sol.du.ac.in/home.php",
         ]
         for seed in extra_seeds:
             if seed not in self.visited and seed not in self.discovery_queue:
@@ -1981,13 +1981,15 @@ puppeteer.use(StealthPlugin());
                             e_date = self.discovery_dates.get(abs_link) or datetime.datetime.now().strftime("%Y-%m-%d")
                             self.discovery_dates[abs_link] = e_date
                         
-                        results.append({
-                            "title": re.sub(r'^\[.*?\]\s*', '', txt).strip()[:100], # type: ignore
-                            "link": abs_link,
-                            "semester": self.extract_semester_logic(txt),
-                            "date": e_date,
-                            "class_time": "", "description": "SOL Announcement"
-                        })
+                        all_sems = self.extract_all_semesters(txt)
+                        for sem in all_sems:
+                            results.append({
+                                "title": re.sub(r'^\[.*?\]\s*', '', txt).strip()[:100], # type: ignore
+                                "link": abs_link,
+                                "semester": sem,
+                                "date": e_date,
+                                "class_time": "", "description": "SOL Announcement"
+                            })
 
         tables = soup.find_all("table")
         is_schedule = "vcs.php" in self.current_url.lower() # pyre-ignore[16]
@@ -2082,13 +2084,15 @@ puppeteer.use(StealthPlugin());
                     if "result" in clean.lower():
                         desc += " | Check Result: https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/Combine_GradeCard.aspx"
                     
-                    results.append({
-                        "title": clean[:100], # type: ignore
-                        "link": abs_link,
-                        "semester": self.extract_semester_logic(txt), # pyre-ignore[16]
-                        "date": e_date,
-                        "class_time": "", "description": desc
-                    })
+                    all_sems = self.extract_all_semesters(txt)
+                    for sem in all_sems:
+                        results.append({
+                            "title": clean[:100], # type: ignore
+                            "link": abs_link,
+                            "semester": sem,
+                            "date": e_date,
+                            "class_time": "", "description": desc
+                        })
 
         # v100.1: Final Filter - Remove anything blacklisted by keyword or URL
         final_filtered = []
@@ -2110,14 +2114,16 @@ puppeteer.use(StealthPlugin());
             
         results = final_filtered
 
-        # 3-Month Date Filter
-        filtered, seen_links = [], set()
+        # 3-Month Date Filter (Deduplicates by link AND semester so multi-semester items aren't discarded)
+        filtered, seen_items = [], set()
         cutoff_date = datetime.datetime.now() - datetime.timedelta(days=90)
         
         for item in results:
-            # FIX: Don't deduplicate #pending links, they are placeholders for different classes
+            # Don't deduplicate #pending links, they are placeholders for different classes
             link = item.get("link", "#pending")
-            if link != "#pending" and link in seen_links:
+            sem = str(item.get("semester", "0"))
+            item_key = (link, sem)
+            if link != "#pending" and item_key in seen_items:
                 continue
             
             try:
@@ -2132,7 +2138,7 @@ puppeteer.use(StealthPlugin());
             if is_recent:
                 filtered.append(item)
                 if link != "#pending":
-                    seen_links.add(link)
+                    seen_items.add(item_key)
         return filtered
 
     async def _extract_frames_html(self, page: Any) -> Optional[str]:
@@ -2338,50 +2344,91 @@ puppeteer.use(StealthPlugin());
                 pass
         return None
 
-    def extract_semester_logic(self, text: str) -> str:
+    def extract_all_semesters(self, text: str) -> List[str]:
+        """
+        Extracts ALL semesters mentioned in a string.
+        Handles single and multi-semester combinations such as:
+          - 'TT MBA SEM I, III 13-09-2026' -> ['1', '3']
+          - 'all-pg-class-time-table-sem-3-and-5' -> ['3', '5']
+          - 'MBA SEM 1 & 2' -> ['1', '2']
+          - 'MBA SEMESTER 1, 2, 3' -> ['1', '2', '3']
+          - 'SEM 1 TO 4' -> ['1', '2', '3', '4']
+        """
         if not text:
-            return "0"
+            return ["0"]
         # CLEANING: Remove any date patterns [YYYY-MM-DD], [DD-MM-YYYY], etc.
-        cleaned_text = re.sub(r"\[?\d{1,4}[-/]\d{1,4}[-/]\d{1,4}\]?", "", text)
+        cleaned_text = re.sub(r"\[?\d{1,4}[-/.]\d{1,4}[-/.]\d{1,4}\]?", "", text)
         t = cleaned_text.upper().replace("-", " ").replace(".", " ")
 
         # ── ADMISSION ITEMS: Merit lists, Discrepancy lists, Hall Tickets ──────
-        # "First/Second Merit List" refers to ADMISSION ROUNDS, not semesters.
-        # These always belong to Sem 1 (ongoing admissions/new students).
         ADMISSION_KEYWORDS = ["MERIT LIST", "DISCREPANCY", "HALL TICKET"]
         if any(kw in t for kw in ADMISSION_KEYWORDS):
-            return "1"
+            return ["1"]
+
+        found_semesters: List[str] = []
+        roman = {"I": "1", "II": "2", "III": "3", "IV": "4", "V": "5", "VI": "6"}
+
+        # 1. Multi-semester cluster: e.g. "SEM I, III", "SEM 1, 3", "SEM I & III", "SEM 3 AND 5"
+        sem_cluster = re.search(r"(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)\s+((?:(?:[1-6]|IV|III|II|I|VI|V)\s*(?:[,&/]|AND|TO|-)\s*)+(?:[1-6]|IV|III|II|I|VI|V))\b", t)
+        if sem_cluster:
+            cluster_text = sem_cluster.group(1)
+            tokens = re.findall(r"\b(IV|III|II|I|VI|V|[1-6])\b", cluster_text)
+            for tok in tokens:
+                s_val = roman.get(tok, tok)
+                if s_val not in found_semesters:
+                    found_semesters.append(s_val)
+
+        # 2. Range: e.g. "SEM 1 TO 4" or "SEM I - IV"
+        range_match = re.search(r"(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)\s+(IV|III|II|I|VI|V|[1-6])\s*(?:TO|-)\s*(IV|III|II|I|VI|V|[1-6])\b", t)
+        if range_match:
+            s_start = int(roman.get(range_match.group(1), range_match.group(1)))
+            s_end = int(roman.get(range_match.group(2), range_match.group(2)))
+            if s_start <= s_end:
+                for s_num in range(s_start, s_end + 1):
+                    s_str = str(s_num)
+                    if s_str not in found_semesters:
+                        found_semesters.append(s_str)
+
+        if found_semesters:
+            return sorted(found_semesters, key=lambda x: int(x))
+
+        # 3. Single semester patterns
+        m = re.search(r"(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)\s*(IV|III|II|I|VI|V|[1-6])\b", t)
+        if m:
+            return [roman.get(m.group(1), m.group(1))]
 
         if "1ST" in t or "FIRST" in t:
-            return "1"
+            return ["1"]
         if "2ND" in t or "SECOND" in t:
-            return "2"
+            return ["2"]
         if "3RD" in t or "THIRD" in t:
-            return "3"
+            return ["3"]
         if "4TH" in t or "FOURTH" in t:
-            return "4"
+            return ["4"]
         if "5TH" in t or "FIFTH" in t:
-            return "5"
-        roman = {"I": "1", "II": "2", "III": "3", "IV": "4", "V": "5"}
-        m = re.search(r"(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)\s*(IV|III|II|I|[1-4])\b", t)
+            return ["5"]
+
+        m = re.search(r"([1-6])(?:ST|ND|RD|TH)?\s*(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)", t)
         if m:
-            return roman.get(m.group(1), m.group(1))
-        m = re.search(r"([1-4])(?:ST|ND|RD|TH)?\s*(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)", t)
-        if m:
-            return m.group(1)
-        m = re.search(r"\b([1-4])(?:ST|ND|RD|TH)\b", t)
-        if m:
-            return m.group(1)
+            return [m.group(1)]
+
         m = re.search(r"MBA\s*(IV|III|II|I|[1-4])\b", t)
         if m:
-            return roman.get(m.group(1), m.group(1))
+            return [roman.get(m.group(1), m.group(1))]
+
         m = re.search(r"\b(IV|III|II|I)\b", t)
         if m:
-            return roman[m.group(1)]
+            return [roman[m.group(1)]]
+
         m = re.search(r"\b([1-4])\b", t)
         if m:
-            return m.group(1)
-        return "0"
+            return [m.group(1)]
+
+        return ["0"]
+
+    def extract_semester_logic(self, text: str) -> str:
+        sems = self.extract_all_semesters(text)
+        return sems[0] if sems else "0"
 
     def _is_valid(self, html: Any) -> bool:
         return bool(html and "sol" in str(html).lower() and len(str(html)) > 500)
@@ -2716,16 +2763,32 @@ puppeteer.use(StealthPlugin());
             text = re.sub(r'\(.*?\)', '', text)
             return text.strip().lower()
 
+        # 0. Expand items that mention multiple semesters in their title or description
+        expanded_results = []
+        for item in results:
+            title = item.get("title", "")
+            sems = self.extract_all_semesters(title)
+            # If title specifies multiple semesters (e.g. SEM I, III) and item only has single semester
+            if len(sems) > 1:
+                for s in sems:
+                    cp = dict(item)
+                    cp["semester"] = s
+                    expanded_results.append(cp)
+            else:
+                expanded_results.append(item)
+        results = expanded_results
+
         unique_check = set()
         clean_results = []
         for item in results:
-            # Create a unique key based on title, date, AND link
+            # Create a unique key based on title, date, link, AND semester
             link = item.get("link", "#pending")
-            u_key = f"{clean_subject(item.get('title'))}-{item.get('date')}-{link}"
+            sem = str(item.get("semester", "0"))
+            u_key = f"{clean_subject(item.get('title'))}-{item.get('date')}-{link}-{sem}"
             
             # ALLOW multiple placeholder links (#pending)
             if link != "#pending" and u_key in unique_check:
-                print(f"  [SYNC-DEDUPE]: Skipping actual duplicate: {item.get('title')[:40]}")
+                print(f"  [SYNC-DEDUPE]: Skipping actual duplicate: {item.get('title')[:40]} (Sem {sem})")
                 continue
             
             unique_check.add(u_key)
