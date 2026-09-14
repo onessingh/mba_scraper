@@ -2801,6 +2801,18 @@ puppeteer.use(StealthPlugin());
             title = str(item.get("title", ""))
             l_title = title.lower()
             l_desc = str(item.get("description", "")).lower()
+
+            # 🛡️ EXPIRED DATE CHECK: If title contains a specific date that has already passed (e.g. 13-09-2026),
+            # DO NOT sync it. This prevents deleted/expired notices from being re-added and spamming push notifications.
+            t_date = self.extract_date_from_text(title)
+            if t_date:
+                try:
+                    dt = datetime.datetime.strptime(t_date, "%Y-%m-%d")
+                    if dt.date() < datetime.datetime.now().date():
+                        print(f"  [SYNC-SKIP]: Title date {t_date} is already expired -> {title[:40]}")
+                        continue
+                except Exception:
+                    pass
             
             # CLASSIFICATION: 100% Bulletproof
             l_title = title.lower()
