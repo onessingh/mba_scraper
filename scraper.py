@@ -2614,14 +2614,14 @@ puppeteer.use(StealthPlugin());
             if not select:
                 return results_found
             options = select.find_all("option")
-            sessions = [opt["value"] for opt in options if opt["value"] != "--"][:1]
+            sessions = [(opt["value"], opt.text.strip()) for opt in options if opt["value"] != "--"][:1]
             
             # 3. For each session, post the form and parse table
-            for session_val in sessions:
+            for session_val, session_name in sessions:
                 data = {
                     "__VIEWSTATE": viewstate["value"],
                     "__VIEWSTATEGENERATOR": viewstategen["value"],
-                    "__EVENTVALIDATION": eventval["value"],
+                    "__EVENTVALIDATION": eventval["value"] if eventval else "",
                     "ddlexamsession": session_val,
                     "btnsearch": "Search Details"
                 }
@@ -2638,14 +2638,22 @@ puppeteer.use(StealthPlugin());
                             # 771 is the exact Course Code for SOL MBA
                             if course_code == "771":
                                 sem = cols[6].text.strip() if len(cols) >= 7 else ""
-                                title = f"[Result Declared] {course_name} - Sem {sem} ({session_val})"
-                                link = "https://durslt.du.ac.in/AC_INTERNET_INDEX/Students/Combine_GradeCard.aspx"
+                                title = f"🎓 Result Declared: MBA Semester {sem} ({session_name})"
+                                link = "https://durslt.du.ac.in/AC_INTERNET_INDEX/Online_Fee_Payment/Std_Rslt_Index.aspx"
+                                desc = (
+                                    f"DU Result declared for {course_name} ({session_name}).\n\n"
+                                    "To check your marksheet, click View Details and then 'Print Marksheet' for the latest session, then fill details as below:\n"
+                                    "• College Name: School of Open Learning\n"
+                                    "• Exam Roll No: (Given on your Admit Card)\n"
+                                    "• Date of Birth\n"
+                                    "• Captcha"
+                                )
                                 results_found.append({
                                     "title": title,
                                     "link": link,
                                     "semester": "1" if "I" == sem else ("2" if "II" == sem else ("3" if "III" == sem else ("4" if "IV" == sem else "0"))),
                                     "date": datetime.datetime.now().strftime("%Y-%m-%d"),
-                                    "description": f"DU Result declared for {course_name} ({session_val}). Check Marksheet link.",
+                                    "description": desc,
                                     "type": "results"
                                 })
             print(f"[DU-RESULTS]: Found {len(results_found)} MBA results.")
