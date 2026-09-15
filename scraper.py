@@ -2715,7 +2715,7 @@ puppeteer.use(StealthPlugin());
                                     "title": title,
                                     "link": link,
                                     "semester": "1" if "I" == sem else ("2" if "II" == sem else ("3" if "III" == sem else ("4" if "IV" == sem else "0"))),
-                                    "date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                                    "date": "2026-09-14" if session_name == "May-June 2026" else datetime.datetime.now().strftime("%Y-%m-%d"),
                                     "description": desc,
                                     "type": "results"
                                 })
