@@ -2591,6 +2591,54 @@ puppeteer.use(StealthPlugin());
                 
         return results
 
+    def _get_du_direct_marksheet_link(self, session_name: str) -> str:
+        try:
+            url = "https://durslt.du.ac.in/AC_INTERNET_INDEX/Online_Fee_Payment/Std_Rslt_Index.aspx"
+            req = cffi_requests if cffi_requests else requests
+            s = req.Session()
+            s.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            r = s.get(url, verify=False, timeout=20)
+            soup = BeautifulSoup(r.text, "html.parser")
+            
+            vs = soup.find("input", id="__VIEWSTATE")
+            vsg = soup.find("input", id="__VIEWSTATEGENERATOR")
+            ev = soup.find("input", id="__EVENTVALIDATION")
+            if not (vs and vsg and ev):
+                return ""
+                
+            table = soup.find("table", id="gvshow")
+            target = None
+            if table:
+                for row in table.find_all("tr"):
+                    cols = row.find_all("td")
+                    if cols and len(cols) >= 5:
+                        if cols[1].text.strip().lower() == session_name.strip().lower():
+                            btn = cols[3].find("a")
+                            if btn and "javascript:__doPostBack" in btn.get("href", ""):
+                                target = btn["href"].split("'", 2)[1]
+                                break
+            
+            if not target:
+                return ""
+                
+            data = {
+                "__EVENTTARGET": target,
+                "__EVENTARGUMENT": "",
+                "__VIEWSTATE": vs["value"],
+                "__VIEWSTATEGENERATOR": vsg["value"],
+                "__EVENTVALIDATION": ev["value"]
+            }
+            
+            r2 = s.post(url, data=data, verify=False, allow_redirects=False, timeout=20)
+            if r2.status_code == 302:
+                redirect = r2.headers.get("Location", "")
+                if redirect.startswith("/"):
+                    redirect = "https://durslt.du.ac.in" + redirect
+                return redirect
+        except Exception as e:
+            print(f"[DU-RESULTS]: Error extracting direct link: {e}")
+        return ""
+
     async def scrape_du_declared_results(self) -> List[Dict[str, Any]]:
         results_found = []
         try:
@@ -2639,15 +2687,30 @@ puppeteer.use(StealthPlugin());
                             if course_code == "771":
                                 sem = cols[6].text.strip() if len(cols) >= 7 else ""
                                 title = f"🎓 Result Declared: MBA Semester {sem} ({session_name})"
-                                link = "https://durslt.du.ac.in/AC_INTERNET_INDEX/Online_Fee_Payment/Std_Rslt_Index.aspx"
-                                desc = (
-                                    f"DU Result declared for {course_name} ({session_name}).\n\n"
-                                    "To check your marksheet, click View Details and then 'Print Marksheet' for the latest session, then fill details as below:\n"
-                                    "• College Name: School of Open Learning\n"
-                                    "• Exam Roll No: (Given on your Admit Card)\n"
-                                    "• Date of Birth\n"
-                                    "• Captcha"
-                                )
+                                
+                                # Auto-extract direct link if possible
+                                direct_link = self._get_du_direct_marksheet_link(session_name)
+                                link = direct_link if direct_link else "https://durslt.du.ac.in/AC_INTERNET_INDEX/Online_Fee_Payment/Std_Rslt_Index.aspx"
+                                
+                                if direct_link:
+                                    desc = (
+                                        f"DU Result declared for {course_name} ({session_name}).\n\n"
+                                        "To check your marksheet, click View Details and fill details as below:\n"
+                                        "• College Name: School of Open Learning\n"
+                                        "• Exam Roll No: (Given on your Admit Card)\n"
+                                        "• Date of Birth\n"
+                                        "• Captcha"
+                                    )
+                                else:
+                                    desc = (
+                                        f"DU Result declared for {course_name} ({session_name}).\n\n"
+                                        "To check your marksheet, click View Details and then 'Print Marksheet' for the latest session, then fill details as below:\n"
+                                        "• College Name: School of Open Learning\n"
+                                        "• Exam Roll No: (Given on your Admit Card)\n"
+                                        "• Date of Birth\n"
+                                        "• Captcha"
+                                    )
+                                
                                 results_found.append({
                                     "title": title,
                                     "link": link,
