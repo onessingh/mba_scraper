@@ -2378,6 +2378,13 @@ puppeteer.use(StealthPlugin());
                 if s_val not in found_semesters:
                     found_semesters.append(s_val)
 
+        # 1.5 Individual explicit matches: e.g. "SEM I AND SEM III"
+        individual_matches = re.findall(r"(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)\s+(IV|III|II|I|VI|V|[1-6])\b", t)
+        for tok in individual_matches:
+            s_val = roman.get(tok, tok)
+            if s_val not in found_semesters:
+                found_semesters.append(s_val)
+
         # 2. Range: e.g. "SEM 1 TO 4" or "SEM I - IV"
         range_match = re.search(r"(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)\s+(IV|III|II|I|VI|V|[1-6])\s*(?:TO|-)\s*(IV|III|II|I|VI|V|[1-6])\b", t)
         if range_match:
@@ -2391,11 +2398,6 @@ puppeteer.use(StealthPlugin());
 
         if found_semesters:
             return sorted(found_semesters, key=lambda x: int(x))
-
-        # 3. Single semester patterns
-        m = re.search(r"(?:SEM(?:ESTER)?|YEAR|YR|PART|TERM)\s*(IV|III|II|I|VI|V|[1-6])\b", t)
-        if m:
-            return [roman.get(m.group(1), m.group(1))]
 
         if "1ST" in t or "FIRST" in t:
             return ["1"]
@@ -2870,11 +2872,8 @@ puppeteer.use(StealthPlugin());
         for item in clean_results:
             link = str(item.get("link", ""))
             title = str(item.get("title", ""))
-            l_title = title.lower()
-            l_desc = str(item.get("description", "")).lower()
-
-            # 🛡️ EXPIRED DATE CHECK: If title contains a specific date that has already passed (e.g. 13-09-2026),
-            # DO NOT sync it. This prevents deleted/expired notices from being re-added and spamming push notifications.
+            
+            # v75: Smart Date Processing
             t_date = self.extract_date_from_text(title)
             if t_date:
                 try:
@@ -2884,21 +2883,21 @@ puppeteer.use(StealthPlugin());
                         continue
                 except Exception:
                     pass
-            
+
             # CLASSIFICATION: 100% Bulletproof
             l_title = title.lower()
             l_desc = str(item.get("description", "")).lower()
-            
+
             # If it has a Teams link, it IS a live class. Period.
             is_class = (
                 "teams.microsoft" in link.lower() or
                 item.get("type") == "live-classes" or
-                item.get("class_time") or 
+                item.get("class_time") or
                 "vcs.php" in link.lower() or
                 re.search(r'\[\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\]', l_title) # Handle BOTH DD-MM and YYYY-MM
             )
-            
-            # Categorization: If it's a class (has Teams link or recognized as class), 
+
+            # Categorization: If it's a class (has Teams link or recognized as class),
             # always put it in live-classes, even if the link is #pending.
             if is_class:
                 category = "live-classes"
@@ -2906,13 +2905,13 @@ puppeteer.use(StealthPlugin());
             else:
                 category = "notifications"
                 print(f"  [SYNC-NOTIF]: {title[:50]}")
-                
-            semester = str(item.get("semester", "0"))
-            # HEALER: If semester is "0", try to find it in the title
-            if semester == "0" and title:
-                semester = self.extract_semester_logic(title)
-                item["semester"] = semester # Persist healed value
-            
+
+            semesters = self.extract_all_semesters(title)
+            if not semesters or semesters == ["0"]:
+                semesters = self.extract_all_semesters(str(item.get("semester", "0")))
+            if not semesters:
+                semesters = ["0"]
+
             # v75.1: Instant End-Time Filtering (Skip for Timetables)
             if is_class and item.get("date") and "[Timetable]" not in title:
                 now = datetime.datetime.now()
@@ -2920,27 +2919,33 @@ puppeteer.use(StealthPlugin());
                 if end_dt and end_dt < now:
                     print(f"  [SYNC-SKIP]: Class already ended today -> {title}")
                     continue
-            
+
             # Ensure scheduledAt is set even if make_iso_scheduled failed (fallback to date only)
             if not item.get("scheduledAt") and item.get("date"):
                 item["scheduledAt"] = f"{item['date']}T00:00:00"
 
-            # Dual-sync logic: Classes go to BOTH live-classes and notifications
-            # Notices go ONLY to notifications
-            if semester not in groups["notifications"]:
-                groups["notifications"][semester] = []
-            
-            if is_class:
-                if semester not in groups["live-classes"]:
-                    groups["live-classes"][semester] = []
-                groups["live-classes"][semester].append(item)
+            # Duplicate the item for each applicable semester
+            for semester in semesters:
+                sem_item = dict(item)
+                sem_item["semester"] = semester
                 
-                # Classes also appear in notifications feed (FORCE SYNC)
-                groups["notifications"][semester].append(item)
-                print(f"  [SYNC-DEBUG]: Adding {title[:30]} to NOTIFS group (Total: {len(groups['notifications'][semester])})")
-            else:
-                # Regular notices only in notifications
-                groups["notifications"][semester].append(item)
+                # Dual-sync logic: Classes go to BOTH live-classes and notifications
+                # Notices go ONLY to notifications
+                if semester not in groups["notifications"]:
+                    groups["notifications"][semester] = []
+                    
+                if is_class:
+                    if semester not in groups["live-classes"]:
+                        groups["live-classes"][semester] = []
+                    groups["live-classes"][semester].append(sem_item)
+                    
+                    # Classes also appear in notifications feed (FORCE SYNC)
+                    groups["notifications"][semester].append(sem_item)
+                    if len(semesters) > 1:
+                        print(f"  [SYNC-DEBUG]: Multi-semester item added to Sem {semester}: {title[:30]}")
+                else:
+                    # Regular notices only in notifications
+                    groups["notifications"][semester].append(sem_item)
 
         # 2. Perform Bulk Syncs
         stats = {"groups_synced": 0, "failed": 0, "deleted": 0}
