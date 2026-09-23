@@ -2399,7 +2399,7 @@ puppeteer.use(StealthPlugin());
         t = cleaned_text.upper().replace("-", " ").replace(".", " ")
 
         # ── ADMISSION ITEMS: Merit lists, Discrepancy lists, Hall Tickets ──────
-        ADMISSION_KEYWORDS = ["MERIT LIST", "DISCREPANCY", "HALL TICKET"]
+        ADMISSION_KEYWORDS = ["MERIT LIST", "DISCREPANCY", "HALL TICKET", "SOL EMP", "ARMED FORCE", "UR LIST", "SC LIST", "ST LIST", "OBC LIST", "PWBD", "EWS"]
         if any(kw in t for kw in ADMISSION_KEYWORDS):
             return ["1"]
 
@@ -3018,8 +3018,9 @@ puppeteer.use(StealthPlugin());
                     if category == "live-classes":
                         sync_deletions = False
                     
-                    if category == "notifications" and semester in ["1", "2", "3", "4"]:
-                        sync_deletions = False
+                    # Temporarily allow deletions on Sem 1-4 to clean up merit lists
+                    # if category == "notifications" and semester in ["1", "2", "3", "4"]:
+                    #     sync_deletions = False
                     
                     # Merge protected items from existing backend feed
                     if category == "notifications":
