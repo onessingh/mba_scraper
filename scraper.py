@@ -2726,7 +2726,9 @@ puppeteer.use(StealthPlugin());
                             # 771 is the exact Course Code for SOL MBA
                             if course_code == "771":
                                 sem = cols[6].text.strip() if len(cols) >= 7 else ""
-                                title = f"🎓 Result Declared: MBA Semester {sem} ({session_name})"
+                                # Remove 2026 to prevent backend getExpiryDateFromTitle from parsing '20' as an expired day in June
+                                clean_session = session_name.replace(' 2026', '')
+                                title = f"🎓 Result Declared: MBA Semester {sem} ({clean_session})"
                                 
                                 # Auto-extract direct link if possible
                                 direct_link = self._get_du_direct_marksheet_link(session_name)
