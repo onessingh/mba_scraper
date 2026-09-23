@@ -2158,10 +2158,19 @@ puppeteer.use(StealthPlugin());
         for table_data in tables:
             if not table_data: continue
             total_rows_found += len(table_data)
+            global_date = ""
             for row_data in table_data:
                 if not isinstance(row_data, dict): continue
                 cells = row_data.get("cells", [])
-                if len(cells) < 4: continue
+                
+                if len(cells) < 4:
+                    # Look for date header row
+                    for c in cells:
+                        txt = str(c.get("text", "")).strip()
+                        m = re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{4}", txt)
+                        if m: 
+                            global_date = m.group(0)
+                    continue
                 
                 row_html = str(row_data.get("html", "")).lower()
                 
@@ -2169,7 +2178,7 @@ puppeteer.use(StealthPlugin());
                 subj = ""
                 time_txt = ""
                 sem_raw = ""
-                current_date = ""
+                current_date = global_date
 
                 # Flexible Detection: Iterate through cells to find values
                 for idx, c in enumerate(cells):
@@ -2177,7 +2186,7 @@ puppeteer.use(StealthPlugin());
                     if not txt: continue
                     
                     if re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{4}", txt):
-                        current_date = txt
+                        current_date = re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{4}", txt).group(0) # type: ignore
                     elif re.search(r"SEM\s*[1-6]", txt.upper()):
                         sem_raw = txt
                     elif re.search(r"\d{1,2}:\d{2}", txt):
