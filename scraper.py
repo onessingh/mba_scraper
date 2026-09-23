@@ -1999,6 +1999,14 @@ puppeteer.use(StealthPlugin());
         for tidx, table in enumerate(tables):
             rows = table.find_all("tr")
             current_date: Optional[str] = None
+            # v75.5: Check preceding element for date (e.g. all-pg-class-time-table)
+            prev = table.find_previous(lambda tag: tag.name in ['div', 'h3', 'h4', 'h5', 'strong'] and 'date' in tag.get_text().lower() and bool(re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{4}', tag.get_text())))
+            if prev:
+                m = re.search(r"(\d{1,2}[-/]\d{1,2}[-/]\d{4})", prev.get_text())
+                if m:
+                    current_date = m.group(1)
+                    if is_schedule:
+                        print(f"    [DEBUG]: Table {tidx} date (from preceding div): {current_date}")
             for row in rows:
                 txt = row.get_text().lower()
                 if "date:" in txt:
@@ -2157,9 +2165,16 @@ puppeteer.use(StealthPlugin());
         total_rows_found = 0
         for table_data in tables:
             if not table_data: continue
-            total_rows_found += len(table_data)
+            
             global_date = ""
-            for row_data in table_data:
+            rows_data = table_data
+            if isinstance(table_data, dict) and "rows" in table_data:
+                rows_data = table_data["rows"]
+                global_date = table_data.get("tableDate", "")
+            
+            total_rows_found += len(rows_data)
+            
+            for row_data in rows_data:
                 if not isinstance(row_data, dict): continue
                 cells = row_data.get("cells", [])
                 
@@ -2268,14 +2283,28 @@ puppeteer.use(StealthPlugin());
             try:
                 data = await ctx.evaluate("""() => {
                     return Array.from(document.querySelectorAll('table')).map(t => {
-                        return Array.from(t.querySelectorAll('tr')).map(tr => ({
-                            cells: Array.from(tr.querySelectorAll('td,th')).map(c => ({
-                                text: c.innerText.trim(),
-                                href: (c.querySelector('a') || {}).href || null,
-                                click: (c.querySelector('a') ? c.querySelector('a').getAttribute('onclick') : null) || (c.getAttribute('onclick') || null)
-                            })),
-                            html: tr.innerHTML
-                        }));
+                        let tableDate = "";
+                        let cur = t;
+                        // Search backwards for a date heading
+                        while (cur.previousElementSibling) {
+                            cur = cur.previousElementSibling;
+                            if (cur.innerText.toLowerCase().includes("date")) {
+                                let m = cur.innerText.match(/\d{1,2}[-\/]\d{1,2}[-\/]\d{4}/);
+                                if (m) { tableDate = m[0]; break; }
+                            }
+                        }
+                        
+                        return {
+                            tableDate: tableDate,
+                            rows: Array.from(t.querySelectorAll('tr')).map(tr => ({
+                                cells: Array.from(tr.querySelectorAll('td,th')).map(c => ({
+                                    text: c.innerText.trim(),
+                                    href: (c.querySelector('a') || {}).href || null,
+                                    click: (c.querySelector('a') ? c.querySelector('a').getAttribute('onclick') : null) || (c.getAttribute('onclick') || null)
+                                })),
+                                html: tr.innerHTML
+                            }))
+                        };
                     });
                 }""")
                 if data:
