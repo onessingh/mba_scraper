@@ -2399,7 +2399,7 @@ puppeteer.use(StealthPlugin());
         t = cleaned_text.upper().replace("-", " ").replace(".", " ")
 
         # ── ADMISSION ITEMS: Merit lists, Discrepancy lists, Hall Tickets ──────
-        ADMISSION_KEYWORDS = ["MERIT LIST", "DISCREPANCY", "HALL TICKET", "SOL EMP", "ARMED FORCE", "UR LIST", "SC LIST", "ST LIST", "OBC LIST", "PWBD", "EWS"]
+        ADMISSION_KEYWORDS = ["MERIT", "DISCREPANCY", "HALL TICKET", "SOL EMP", "ARMED FORCE", "UR LIST", "SC LIST", "ST LIST", "OBC LIST", "PWBD", "EWS", "4TH ST", "4TH SC", "4TH OBC", "4TH UR", "2ND UR", "2ND SC", "2ND OBC", "2ND ST", "2ND EWS", "HCA 2ND"]
         if any(kw in t for kw in ADMISSION_KEYWORDS):
             return ["1"]
 
