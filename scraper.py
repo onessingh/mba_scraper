@@ -2890,21 +2890,26 @@ puppeteer.use(StealthPlugin());
                 expanded_results.append(item)
         results = expanded_results
 
-        unique_check = set()
-        clean_results = []
+        # Smarter deduplication: Overwrite #pending with real links!
+        unique_map = {}
         for item in results:
-            # Create a unique key based on title, date, link, AND semester
             link = item.get("link", "#pending")
             sem = str(item.get("semester", "0"))
-            u_key = f"{clean_subject(item.get('title'))}-{item.get('date')}-{link}-{sem}"
+            # DO NOT include link in u_key so we can dedupe placeholders against real links
+            u_key = f"{clean_subject(item.get('title'))}-{item.get('date')}-{sem}"
             
-            # ALLOW multiple placeholder links (#pending)
-            if link != "#pending" and u_key in unique_check:
-                print(f"  [SYNC-DEDUPE]: Skipping actual duplicate: {item.get('title')[:40]} (Sem {sem})")
-                continue
-            
-            unique_check.add(u_key)
-            clean_results.append(item)
+            if u_key not in unique_map:
+                unique_map[u_key] = item
+            else:
+                existing_link = unique_map[u_key].get("link", "#pending")
+                if existing_link == "#pending" and link != "#pending":
+                    print(f"  [SYNC-DEDUPE]: Upgrading #pending to REAL LINK for: {item.get('title')[:40]} (Sem {sem})")
+                    unique_map[u_key] = item
+                elif link != "#pending" and existing_link != "#pending":
+                    # If BOTH are real links, keep the first one
+                    pass
+
+        clean_results = list(unique_map.values())
         
         print(f"[SYNC]: Clean results (after deduplication): {len(clean_results)}")
         
