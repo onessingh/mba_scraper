@@ -2000,7 +2000,7 @@ puppeteer.use(StealthPlugin());
             rows = table.find_all("tr")
             current_date: Optional[str] = None
             # v75.5: Check preceding element for date (e.g. all-pg-class-time-table)
-            prev = table.find_previous(lambda tag: tag.name in ['div', 'h3', 'h4', 'h5', 'strong'] and 'date' in tag.get_text().lower() and bool(re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{4}', tag.get_text())))
+            prev = table.find_previous(lambda tag: tag.name in ['div', 'h3', 'h4', 'h5', 'strong'] and bool(re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{4}', tag.get_text())))
             if prev:
                 m = re.search(r"(\d{1,2}[-/]\d{1,2}[-/]\d{4})", prev.get_text())
                 if m:
@@ -2288,10 +2288,9 @@ puppeteer.use(StealthPlugin());
                         // Search backwards for a date heading
                         while (cur.previousElementSibling) {
                             cur = cur.previousElementSibling;
-                            if (cur.innerText.toLowerCase().includes("date")) {
-                                let m = cur.innerText.match(/\d{1,2}[-\/]\d{1,2}[-\/]\d{4}/);
-                                if (m) { tableDate = m[0]; break; }
-                            }
+                            let text = cur.innerText || "";
+                            let m = text.match(/\d{1,2}[-\/]\d{1,2}[-\/]\d{4}/);
+                            if (m) { tableDate = m[0]; break; }
                         }
                         
                         return {
