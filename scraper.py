@@ -2865,14 +2865,14 @@ puppeteer.use(StealthPlugin());
             if not text: return ""
             # Strip [Date]
             text = re.sub(r'\[.*?\]', '', text)
-            # Strip common prefixes
+            # Strip common prefixes (case insensitive)
             for prefix in ["MBA Sem 1:", "MBA Sem 2:", "MBA Sem 3:", "MBA Sem 4:", "MBA Live Class:", "Live Class:", "Sem 1:", "Sem 2:", "Sem 3:", "Sem 4:"]:
-                text = text.replace(prefix, "")
-            # Strip everything before the last colon (often the subject is after the colon)
+                text = re.compile(re.escape(prefix), re.IGNORECASE).sub("", text)
+            # Strip everything before the last colon (but ignore colons in times like 03:00)
+            # A safer way: remove the time first, then split by colon.
+            text = re.sub(r'\(.*?\)', '', text)
             if ":" in text:
                 text = text.split(":")[-1]
-            # Strip anything in parentheses like (2:00 PM - 3:00 PM)
-            text = re.sub(r'\(.*?\)', '', text)
             return text.strip().lower()
 
         # 0. Expand items that mention multiple semesters in their title or description
