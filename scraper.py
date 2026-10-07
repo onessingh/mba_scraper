@@ -2399,8 +2399,22 @@ puppeteer.use(StealthPlugin());
         t = cleaned_text.upper().replace("-", " ").replace(".", " ")
 
         # ── ADMISSION ITEMS: Merit lists, Discrepancy lists, Hall Tickets ──────
-        ADMISSION_KEYWORDS = ["MERIT", "DISCREPANCY", "HALL TICKET", "SOL EMP", "ARMED FORCE", "UR LIST", "SC LIST", "ST LIST", "OBC LIST", "PWBD", "EWS", "4TH ST", "4TH SC", "4TH OBC", "4TH UR", "2ND UR", "2ND SC", "2ND OBC", "2ND ST", "2ND EWS", "HCA 2ND"]
-        if any(kw in t for kw in ADMISSION_KEYWORDS):
+        ADMISSION_KEYWORDS = [
+            "MERIT", "DISCREPANCY", "HALL TICKET", "SOL EMP", "ARMED FORCE", 
+            "UR LIST", "SC LIST", "ST LIST", "OBC LIST", "PWBD", "EWS",
+            "1ST ST", "1ST SC", "1ST OBC", "1ST UR", "1ST EWS", "HCA 1ST",
+            "2ND ST", "2ND SC", "2ND OBC", "2ND UR", "2ND EWS", "HCA 2ND",
+            "3RD ST", "3RD SC", "3RD OBC", "3RD UR", "3RD EWS", "HCA 3RD",
+            "4TH ST", "4TH SC", "4TH OBC", "4TH UR", "4TH EWS", "HCA 4TH",
+            "5TH ST", "5TH SC", "5TH OBC", "5TH UR", "5TH EWS", "HCA 5TH"
+        ]
+        is_admission = (
+            any(kw in t for kw in ADMISSION_KEYWORDS) or
+            bool(re.search(r"\b(?:1ST|2ND|3RD|4TH|5TH)\s+(?:UR|SC|ST|OBC|EWS|PWBD|LIST|MERIT)\b", t)) or
+            bool(re.search(r"\bHCA\s+(?:1ST|2ND|3RD|4TH|5TH)\b", t)) or
+            bool(re.search(r"\b(?:UR|SC|ST|OBC|EWS|PWBD)\s+(?:1ST|2ND|3RD|4TH|5TH)\b", t))
+        )
+        if is_admission:
             return ["1"]
 
         found_semesters: List[str] = []
