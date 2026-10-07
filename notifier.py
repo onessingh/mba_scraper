@@ -9,7 +9,14 @@ import json
 
 class Notifier:
     def __init__(self, api_url, scraper_key=None, ultra_msg_token=None, ultra_msg_instance=None):
-        self.website_api_url = api_url.rstrip('/')
+        primary_url = api_url.rstrip('/')
+        secondary_url = "https://solmates-backend-f9rl.onrender.com"
+        
+        self.website_api_urls = [primary_url]
+        if secondary_url not in self.website_api_urls:
+            self.website_api_urls.append(secondary_url)
+
+        self.website_api_url = primary_url
         self.scraper_key = scraper_key
         self.ultra_msg_token = ultra_msg_token
         self.ultra_msg_instance = ultra_msg_instance
@@ -74,25 +81,23 @@ class Notifier:
             return False
 
     def bulk_sync_to_website(self, category, semester, items, allow_deletions=True):
-        """Bulk Sync: Replaces an entire semester's data in one transaction."""
-        sync_url = f"{self.website_api_url}/api/sol/sync-bulk/{category}/{semester}"
-        
-        # Add deletion flag to URL
-        if not allow_deletions:
-            sync_url += "?allowDeletions=false"
-            
-        headers = {"Content-Type": "application/json", "x-scraper-key": self.scraper_key}
-        
+        """Bulk Sync: Replaces an entire semester's data in one transaction across all backends."""
+        success = False
         print(f"  [API]: BULK SYNC {category} Sem {semester} ({len(items)} items) | Deletions: {allow_deletions}")
         payload = {"items": items}
-        resp = self._request_with_retry("POST", sync_url, json=payload, headers=headers)
+        headers = {"Content-Type": "application/json", "x-scraper-key": self.scraper_key}
         
-        if resp and resp.status_code == 200:
-            print(f"  [✅ OK]: Bulk sync successful for {category} Sem {semester}.")
-            return True
-        else:
-            print(f"  [❌ FAILED]: Bulk sync failed (Status: {resp.status_code if resp else 'No Response'})")
-            return False
+        for base_url in self.website_api_urls:
+            sync_url = f"{base_url}/api/sol/sync-bulk/{category}/{semester}"
+            if not allow_deletions:
+                sync_url += "?allowDeletions=false"
+            resp = self._request_with_retry("POST", sync_url, json=payload, headers=headers)
+            if resp and resp.status_code == 200:
+                print(f"  [✅ OK]: Bulk sync successful for {category} Sem {semester} ({base_url}).")
+                success = True
+            else:
+                print(f"  [⚠️ FAILOVER]: Bulk sync skipped/failed for {base_url}")
+        return success
 
     def update_on_website(self, semester, item_id, notice_data):
         url = f"{self.website_api_url}/api/sol/notifications/{semester}/{item_id}"
