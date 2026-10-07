@@ -9,7 +9,7 @@ async def seed():
     print("Starting historical seeding (Last 15 Days) of MBA notifications...")
     
     # Configuration
-    API_URL = os.environ.get("BACKEND_API_URL", "https://solmates-backend-w27e.onrender.com")
+    API_URL = os.environ.get("BACKEND_API_URL", "https://solmates-backend-f9rl.onrender.com")
     API_KEY = os.environ.get("SCRAPER_API_KEY")
     
     scraper = MBAScraper()

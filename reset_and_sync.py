@@ -34,7 +34,7 @@ except ImportError:
     print("[ERROR]: scraper.py nahi mila.")
     sys.exit(1)
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://solmates-backend-w27e.onrender.com")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://solmates-backend-f9rl.onrender.com")
 SCRAPER_KEY = os.environ.get("SCRAPER_KEY", "")
 SYNCED_FILE = "synced_ids.json"
 SEMESTERS   = ["0", "1", "2", "3", "4"]

@@ -6,7 +6,7 @@ from scraper import MBAScraper # type: ignore
 
 # --- CONFIG ---
 SCRAPER_KEY = os.environ.get("SCRAPER_KEY")
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://solmates-backend-w27e.onrender.com")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://solmates-backend-f9rl.onrender.com")
 
 def reset_everything():
     print(f"[RESET]: Connecting to {BACKEND_URL}...")
