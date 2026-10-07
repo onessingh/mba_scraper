@@ -8,6 +8,7 @@ import re
 import random
 import os
 import json
+import hashlib
 import base64
 import sys
 import time
@@ -3006,9 +3007,31 @@ puppeteer.use(StealthPlugin());
         
         is_termux_env = os.environ.get("IS_TERMUX", "false").lower() == "true"
 
+        # Smart Delta Sync: Skip Render API calls if category/semester data is unchanged
+        hash_file = "synced_hashes.json"
+        saved_hashes = {}
+        if os.path.exists(hash_file):
+            try:
+                with open(hash_file, "r") as f:
+                    saved_hashes = json.load(f)
+            except Exception:
+                saved_hashes = {}
+        new_hashes = dict(saved_hashes)
+
         for category in target_categories:
             for semester in target_semesters:
                 items = groups[category].get(semester, []) # type: ignore
+
+                # Compute MD5 content fingerprint for this semester
+                item_tokens = [f"{i.get('title')}-{i.get('date')}-{i.get('link')}" for i in items]
+                content_str = "|".join(sorted(item_tokens))
+                content_hash = hashlib.md5(content_str.encode('utf-8')).hexdigest()
+                hash_key = f"{category}_{semester}"
+
+                force_sync = os.environ.get("FORCED_SYNC", "false").lower() == "true"
+                if not force_sync and saved_hashes.get(hash_key) == content_hash:
+                    print(f"  [⚡ SMART-SKIP]: {category} Sem {semester} data unchanged. Skipping Render API call!")
+                    continue
 
                 if is_termux_env:
                     # TERMUX: Full authority - sync everything as-is
@@ -3023,10 +3046,6 @@ puppeteer.use(StealthPlugin());
                     
                     if category == "live-classes":
                         sync_deletions = False
-                    
-                    # Temporarily allow deletions on Sem 1-4 to clean up merit lists
-                    # if category == "notifications" and semester in ["1", "2", "3", "4"]:
-                    #     sync_deletions = False
                     
                     # Merge protected items from existing backend feed
                     if category == "notifications":
@@ -3046,15 +3065,21 @@ puppeteer.use(StealthPlugin());
                         continue
 
                 # v75.7: MODAL PROTECTION
-                # If we are only syncing classes, we MUST NOT delete regular notifications.
                 if category == "notifications" and getattr(self, "target_mode", "all") == "classes":
                     sync_deletions = False
                     print(f"  [GUARD]: Classes-only mode detected. Disabling deletions for NOTIFICATIONS.")
 
                 if notifier.bulk_sync_to_website(category, semester, items, allow_deletions=sync_deletions):
                     stats["groups_synced"] += 1 # type: ignore
+                    new_hashes[hash_key] = content_hash
                 else:
                     stats["failed"] += 1 # type: ignore
+
+        try:
+            with open(hash_file, "w") as f:
+                json.dump(new_hashes, f)
+        except Exception as e:
+            print(f"[SYNC-HASH]: Failed to save hash file: {e}")
 
 
         # v73.9: Manual Dismissal & Restore Detection
