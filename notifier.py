@@ -101,6 +101,7 @@ class Notifier:
             if resp and resp.status_code == 200:
                 print(f"  [✅ OK]: Bulk sync successful for {category} Sem {semester} ({base_url}).")
                 success = True
+                break  # Stop on success, do not duplicate POST to secondary failover backend
             else:
                 print(f"  [⚠️ FAILOVER]: Bulk sync skipped/failed for {base_url}")
         return success
