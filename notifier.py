@@ -82,6 +82,12 @@ class Notifier:
 
     def bulk_sync_to_website(self, category, semester, items, allow_deletions=True):
         """Bulk Sync: Replaces an entire semester's data in one transaction across all backends."""
+        import os
+        force_sync = os.environ.get("FORCED_SYNC", "false").lower() == "true"
+        if not force_sync and self._is_payload_unchanged(category, semester, items):
+            print(f"  [⚡ API-SKIP]: Payload for {category} Sem {semester} unchanged, skipping HTTP POST.")
+            return True
+
         success = False
         print(f"  [API]: BULK SYNC {category} Sem {semester} ({len(items)} items) | Deletions: {allow_deletions}")
         payload = {"items": items}
@@ -146,11 +152,35 @@ class Notifier:
             print(f"[RESET]: Failed to clear category '{category}' (Status: {resp.status_code if resp else 'No Response'})")
             return False
 
+    def _is_payload_unchanged(self, category, semester, items):
+        import hashlib, os
+        try:
+            items_str = json.dumps(items, sort_keys=True)
+            p_hash = hashlib.md5(items_str.encode('utf-8')).hexdigest()
+            hash_file = os.path.join(os.path.dirname(__file__), "payload_hashes.json")
+            cached = {}
+            if os.path.exists(hash_file):
+                with open(hash_file, "r") as f:
+                    cached = json.load(f)
+            key = f"{category}_{semester}"
+            if cached.get(key) == p_hash:
+                return True
+            cached[key] = p_hash
+            with open(hash_file, "w") as f:
+                json.dump(cached, f)
+        except Exception:
+            pass
+        return False
+
     def sync_bulk_to_website(self, category, semester, items):
         """
         🚀 BULK SYNC: Sends a full list of current notices for a semester.
         The backend handles Adds, Updates (links), and Deletions.
         """
+        if self._is_payload_unchanged(category, semester, items):
+            print(f"  [API][SKIP]: Payload for {category} Sem {semester} unchanged, skipping HTTP POST.")
+            return {"success": True, "skipped": True}
+
         url = f"{self.website_api_url}/api/sol/sync-bulk/{category}/{semester}"
         payload = {"items": items}
         headers = {"Content-Type": "application/json", "x-scraper-key": self.scraper_key}

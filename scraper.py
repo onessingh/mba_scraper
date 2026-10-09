@@ -3022,7 +3022,7 @@ puppeteer.use(StealthPlugin());
         is_termux_env = os.environ.get("IS_TERMUX", "false").lower() == "true"
 
         # Smart Delta Sync: Skip Render API calls if category/semester data is unchanged
-        hash_file = "synced_hashes.json"
+        hash_file = os.path.join(os.path.dirname(__file__), "synced_hashes.json")
         saved_hashes = {}
         if os.path.exists(hash_file):
             try:

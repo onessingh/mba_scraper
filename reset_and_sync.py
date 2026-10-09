@@ -58,14 +58,22 @@ def delete_all(notifier: Notifier):
 
 
 def clear_memory():
-    """synced_ids.json reset karo taaki sab kuch dobara sync ho."""
+    """synced_ids.json and hash caches reset karo taaki sab kuch dobara sync ho."""
     print("\n" + "="*50)
-    print("[RESET]: Step 2 — Local memory (synced_ids.json) clear kar rahe hain...")
+    print("[RESET]: Step 2 — Local memory & hash caches clear kar rahe hain...")
     print("="*50)
 
-    with open(SYNCED_FILE, "w") as f:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(base_dir, SYNCED_FILE), "w") as f:
         json.dump([], f)
-    print(f"  ✅ {SYNCED_FILE} cleared.")
+
+    for h_file in ["synced_hashes.json", "payload_hashes.json"]:
+        h_path = os.path.join(base_dir, h_file)
+        if os.path.exists(h_path):
+            os.remove(h_path)
+            print(f"  ✅ Removed {h_file}")
+
+    print(f"  ✅ {SYNCED_FILE} and hash caches cleared.")
 
 
 async def fresh_scrape_and_sync(notifier: Notifier):
