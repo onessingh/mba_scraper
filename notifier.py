@@ -9,8 +9,11 @@ import json
 
 class Notifier:
     def __init__(self, api_url, scraper_key=None, ultra_msg_token=None, ultra_msg_instance=None):
-        primary_url = api_url.rstrip('/')
-        secondary_url = "https://solmates-backend-f9rl.onrender.com"
+        primary_url = (api_url or "").rstrip('/')
+        if not primary_url or 'w27e' in primary_url:
+            primary_url = "https://solmates-backend-f9rl.onrender.com"
+        
+        secondary_url = "https://api.solmates.in"
         
         self.website_api_urls = [primary_url]
         if secondary_url not in self.website_api_urls:
