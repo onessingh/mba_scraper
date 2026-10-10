@@ -10,16 +10,18 @@ import json
 class Notifier:
     def __init__(self, api_url, scraper_key=None, ultra_msg_token=None, ultra_msg_instance=None):
         primary_url = (api_url or "").rstrip('/')
-        if not primary_url or 'w27e' in primary_url:
+        if not primary_url:
             primary_url = "https://solmates-backend-f9rl.onrender.com"
         
-        secondary_url = "https://api.solmates.in"
+        urls = [primary_url, "https://solmates-backend-f9rl.onrender.com", "https://solmates-backend-w27e.onrender.com", "https://api.solmates.in"]
         
-        self.website_api_urls = [primary_url]
-        if secondary_url not in self.website_api_urls:
-            self.website_api_urls.append(secondary_url)
+        self.website_api_urls = []
+        for u in urls:
+            u_clean = u.rstrip('/')
+            if u_clean and u_clean not in self.website_api_urls:
+                self.website_api_urls.append(u_clean)
 
-        self.website_api_url = primary_url
+        self.website_api_url = self.website_api_urls[0]
         self.scraper_key = scraper_key
         self.ultra_msg_token = ultra_msg_token
         self.ultra_msg_instance = ultra_msg_instance
@@ -104,7 +106,6 @@ class Notifier:
             if resp and resp.status_code == 200:
                 print(f"  [✅ OK]: Bulk sync successful for {category} Sem {semester} ({base_url}).")
                 success = True
-                break  # Stop on success, do not duplicate POST to secondary failover backend
             else:
                 print(f"  [⚠️ FAILOVER]: Bulk sync skipped/failed for {base_url}")
         return success
