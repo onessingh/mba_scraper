@@ -10,15 +10,15 @@ import json
 class Notifier:
     def __init__(self, api_url, scraper_key=None, ultra_msg_token=None, ultra_msg_instance=None):
         primary_url = (api_url or "").rstrip('/')
-        if not primary_url:
-            primary_url = "https://solmates-backend-f9rl.onrender.com"
+        if not primary_url or "f9rl" in primary_url:
+            primary_url = "https://solmates-backend-w27e.onrender.com"
         
-        urls = [primary_url, "https://solmates-backend-f9rl.onrender.com", "https://solmates-backend-w27e.onrender.com", "https://api.solmates.in"]
+        urls = [primary_url, "https://solmates-backend-w27e.onrender.com", "https://api.solmates.in"]
         
         self.website_api_urls = []
         for u in urls:
             u_clean = u.rstrip('/')
-            if u_clean and u_clean not in self.website_api_urls:
+            if u_clean and u_clean not in self.website_api_urls and "f9rl" not in u_clean:
                 self.website_api_urls.append(u_clean)
 
         self.website_api_url = self.website_api_urls[0]
@@ -105,7 +105,9 @@ class Notifier:
             resp = self._request_with_retry("POST", sync_url, json=payload, headers=headers)
             if resp and resp.status_code == 200:
                 print(f"  [✅ OK]: Bulk sync successful for {category} Sem {semester} ({base_url}).")
+                self._save_payload_hash(category, semester, items)
                 success = True
+                break  # 🛑 STOP LOOP ON SUCCESS: Prevent duplicate POST to failover URLs!
             else:
                 print(f"  [⚠️ FAILOVER]: Bulk sync skipped/failed for {base_url}")
         return success
@@ -139,8 +141,11 @@ class Notifier:
         resp = self._request_with_retry("GET", url, headers=headers)
         if resp and resp.status_code == 200:
             try:
+                raw_size = len(resp.content)
                 data = resp.json().get('data')
-                return data if isinstance(data, list) else []
+                items = data if isinstance(data, list) else []
+                print(f"  [API][GET]: {category} Sem {semester} -> Size: {raw_size} bytes ({len(items)} items)")
+                return items
             except Exception:
                 return []
         return []
@@ -163,19 +168,32 @@ class Notifier:
             items_str = json.dumps(items, sort_keys=True)
             p_hash = hashlib.md5(items_str.encode('utf-8')).hexdigest()
             hash_file = os.path.join(os.path.dirname(__file__), "payload_hashes.json")
+            if os.path.exists(hash_file):
+                with open(hash_file, "r") as f:
+                    cached = json.load(f)
+                key = f"{category}_{semester}"
+                if cached.get(key) == p_hash:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _save_payload_hash(self, category, semester, items):
+        import hashlib, os
+        try:
+            items_str = json.dumps(items, sort_keys=True)
+            p_hash = hashlib.md5(items_str.encode('utf-8')).hexdigest()
+            hash_file = os.path.join(os.path.dirname(__file__), "payload_hashes.json")
             cached = {}
             if os.path.exists(hash_file):
                 with open(hash_file, "r") as f:
                     cached = json.load(f)
             key = f"{category}_{semester}"
-            if cached.get(key) == p_hash:
-                return True
             cached[key] = p_hash
             with open(hash_file, "w") as f:
                 json.dump(cached, f)
         except Exception:
             pass
-        return False
 
     def sync_bulk_to_website(self, category, semester, items):
         """
@@ -193,16 +211,18 @@ class Notifier:
         print(f"[API][BULK]: Syncing {len(items)} items for {category} Semester {semester}...")
         resp = self._request_with_retry("POST", url, json=payload, headers=headers)
         
-        if resp is not None:
+        if resp is not None and resp.status_code == 200:
             try:
                 stats = resp.json().get('stats', {})
                 print(f"  [API][BULK]: Success | Added: {stats.get('added',0)}, Updated: {stats.get('updated',0)}, Deleted: {stats.get('deleted',0)}")
+                self._save_payload_hash(category, semester, items)
                 return stats # Return full stats
             except Exception:
                 print(f"  [API][BULK]: Success (Status: {resp.status_code})")
+                self._save_payload_hash(category, semester, items)
                 return {"success": True}
         else:
-            print(f"  [API][BULK]: FAILED (No response)")
+            print(f"  [API][BULK]: FAILED (No response or Status {resp.status_code if resp else 'None'})")
             return {"success": False, "error": "No Response"}
 
     def clear_blacklist(self):
