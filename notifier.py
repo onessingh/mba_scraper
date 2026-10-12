@@ -195,6 +195,41 @@ class Notifier:
         except Exception:
             pass
 
+    def _fetch_backend_blacklist(self):
+        """Fetch the backend blacklist so scraper can pre-filter items before sending."""
+        try:
+            url = f"{self.website_api_url}/api/sol/blacklist"
+            headers = {"x-scraper-key": self.scraper_key}
+            resp = self._request_with_retry("GET", url, headers=headers, timeout=15)
+            if resp and resp.status_code == 200:
+                data = resp.json().get("data", [])
+                bl_titles = set(b.get("title", "").lower().strip() for b in data if b.get("title"))
+                bl_links  = set(b.get("link",  "").lower().strip().split("?")[0] for b in data if b.get("link"))
+                return bl_titles, bl_links
+        except Exception as e:
+            print(f"  [BL-FETCH]: Could not fetch backend blacklist: {e}")
+        return set(), set()
+
+    def _pre_filter_blacklisted(self, items, bl_titles, bl_links):
+        """Remove items whose title or link is in the backend blacklist."""
+        filtered = []
+        skipped = 0
+        for item in items:
+            title = (item.get("title") or "").lower().strip()
+            link  = (item.get("link")  or "").lower().strip().split("?")[0]
+            if title and title in bl_titles:
+                print(f"  [PRE-FILTER]: Skipping blacklisted title: {item.get('title')[:60]}")
+                skipped += 1
+                continue
+            if link and link in bl_links:
+                print(f"  [PRE-FILTER]: Skipping blacklisted link: {link[:60]}")
+                skipped += 1
+                continue
+            filtered.append(item)
+        if skipped:
+            print(f"  [PRE-FILTER]: Removed {skipped} blacklisted items before sync.")
+        return filtered
+
     def sync_bulk_to_website(self, category, semester, items):
         """
         🚀 BULK SYNC: Sends a full list of current notices for a semester.
@@ -203,6 +238,12 @@ class Notifier:
         if self._is_payload_unchanged(category, semester, items):
             print(f"  [API][SKIP]: Payload for {category} Sem {semester} unchanged, skipping HTTP POST.")
             return {"success": True, "skipped": True}
+
+        # ── PRE-FILTER: Remove backend-blacklisted items before sending ──
+        # Fetches blacklist once per call; on failure silently continues without filtering
+        bl_titles, bl_links = self._fetch_backend_blacklist()
+        if bl_titles or bl_links:
+            items = self._pre_filter_blacklisted(items, bl_titles, bl_links)
 
         url = f"{self.website_api_url}/api/sol/sync-bulk/{category}/{semester}"
         payload = {"items": items}
